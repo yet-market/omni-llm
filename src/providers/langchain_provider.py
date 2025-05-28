@@ -1,22 +1,22 @@
 """
-LangChain Universal Provider Implementation
-==========================================
+LangChain Universal Provider with Native Fallback Runnable
+==========================================================
 
-Single provider implementation using LangChain with built-in fallback support
-for all major LLM providers.
+Implementation using LangChain's built-in with_fallbacks() runnable for
+automatic provider fallback support.
 """
 
 import logging
 import time
-from typing import Dict, Any, List, Optional, Type
+from typing import Dict, Any, List, Optional, Union
 from datetime import datetime
 
-# LangChain imports
+# LangChain core imports
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_core.output_parsers import JsonOutputParser, PydanticOutputParser
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import Runnable, RunnableWithFallbacks
 from langchain_core.exceptions import LangChainException
 
 # Provider-specific imports
@@ -38,10 +38,7 @@ except ImportError:
     ChatVertexAI = None
 
 from ..core.exceptions import ProviderError, ConfigurationError
-from ..models.architecture import (
-    RequestSchema, LLMProvider, FallbackStrategy, 
-    ProviderAttempt, ModelConfiguration
-)
+from ..models.architecture import RequestSchema, LLMProvider, FallbackStrategy
 from ..utils.config import Config
 
 logger = logging.getLogger(__name__)
@@ -49,229 +46,295 @@ logger = logging.getLogger(__name__)
 
 class LangChainProvider:
     """
-    Universal LangChain provider with automatic fallback support.
+    Universal LangChain provider using native fallback runnables.
     
-    This provider uses LangChain's built-in capabilities to handle multiple
-    LLM providers with intelligent fallback and cost optimization.
+    This provider leverages LangChain's built-in with_fallbacks() method
+    to create robust runnable chains with automatic provider fallback.
     """
     
     def __init__(self, config: Config):
         """
-        Initialize LangChain provider with all available models.
+        Initialize LangChain provider with fallback runnables.
         
         Args:
             config: Configuration object
         """
         self.config = config
-        self.providers: Dict[LLMProvider, Dict[str, BaseChatModel]] = {}
-        self.model_catalog: Dict[str, ModelConfiguration] = {}
-        self._initialize_providers()
-        self._load_model_catalog()
+        self.models: Dict[str, BaseChatModel] = {}
+        self.fallback_chains: Dict[str, RunnableWithFallbacks] = {}
+        self._initialize_models()
+        self._create_fallback_chains()
     
-    def _initialize_providers(self) -> None:
-        """Initialize all available LangChain providers."""
+    def _initialize_models(self) -> None:
+        """Initialize all available LangChain models."""
         try:
-            # OpenAI
+            # OpenAI models
             if self.config.openai_api_key:
-                self.providers[LLMProvider.OPENAI] = self._init_openai_models()
-                logger.info("OpenAI provider initialized")
+                self.models.update({
+                    "gpt-4o": ChatOpenAI(
+                        model="gpt-4o",
+                        api_key=self.config.openai_api_key,
+                        max_retries=0,  # Let fallback handle retries
+                        timeout=60
+                    ),
+                    "gpt-4o-mini": ChatOpenAI(
+                        model="gpt-4o-mini", 
+                        api_key=self.config.openai_api_key,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "gpt-3.5-turbo": ChatOpenAI(
+                        model="gpt-3.5-turbo",
+                        api_key=self.config.openai_api_key,
+                        max_retries=0,
+                        timeout=60
+                    )
+                })
+                logger.info("OpenAI models initialized")
             
-            # Anthropic
+            # Anthropic models
             if self.config.anthropic_api_key:
-                self.providers[LLMProvider.ANTHROPIC] = self._init_anthropic_models()
-                logger.info("Anthropic provider initialized")
+                self.models.update({
+                    "claude-3-5-sonnet-20241022": ChatAnthropic(
+                        model="claude-3-5-sonnet-20241022",
+                        api_key=self.config.anthropic_api_key,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "claude-3-5-haiku-20241022": ChatAnthropic(
+                        model="claude-3-5-haiku-20241022",
+                        api_key=self.config.anthropic_api_key,
+                        max_retries=0,
+                        timeout=60
+                    )
+                })
+                logger.info("Anthropic models initialized")
             
-            # Groq
+            # Groq models (ultra-fast)
             if self.config.groq_api_key:
-                self.providers[LLMProvider.GROQ] = self._init_groq_models()
-                logger.info("Groq provider initialized")
+                self.models.update({
+                    "llama-3.1-70b-versatile": ChatGroq(
+                        model="llama-3.1-70b-versatile",
+                        api_key=self.config.groq_api_key,
+                        max_retries=0,
+                        timeout=30
+                    ),
+                    "llama-3.1-8b-instant": ChatGroq(
+                        model="llama-3.1-8b-instant",
+                        api_key=self.config.groq_api_key,
+                        max_retries=0,
+                        timeout=30
+                    ),
+                    "mixtral-8x7b-32768": ChatGroq(
+                        model="mixtral-8x7b-32768",
+                        api_key=self.config.groq_api_key,
+                        max_retries=0,
+                        timeout=30
+                    )
+                })
+                logger.info("Groq models initialized")
             
-            # Mistral AI
+            # Mistral AI models
             if self.config.mistral_api_key:
-                self.providers[LLMProvider.MISTRAL_AI] = self._init_mistral_models()
-                logger.info("Mistral AI provider initialized")
+                self.models.update({
+                    "mistral-large-latest": ChatMistralAI(
+                        model="mistral-large-latest",
+                        api_key=self.config.mistral_api_key,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "mistral-small-latest": ChatMistralAI(
+                        model="mistral-small-latest",
+                        api_key=self.config.mistral_api_key,
+                        max_retries=0,
+                        timeout=60
+                    )
+                })
+                logger.info("Mistral AI models initialized")
             
-            # Cohere
+            # Cohere models
             if self.config.cohere_api_key:
-                self.providers[LLMProvider.COHERE] = self._init_cohere_models()
-                logger.info("Cohere provider initialized")
+                self.models.update({
+                    "command-r-plus": ChatCohere(
+                        model="command-r-plus",
+                        cohere_api_key=self.config.cohere_api_key,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "command-r": ChatCohere(
+                        model="command-r",
+                        cohere_api_key=self.config.cohere_api_key,
+                        max_retries=0,
+                        timeout=60
+                    )
+                })
+                logger.info("Cohere models initialized")
             
             # AWS Bedrock (if in AWS environment)
             if ChatBedrock and self._is_aws_environment():
-                self.providers[LLMProvider.AWS_BEDROCK] = self._init_bedrock_models()
-                logger.info("AWS Bedrock provider initialized")
+                self.models.update({
+                    "anthropic.claude-3-5-sonnet-20241022-v2:0": ChatBedrock(
+                        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+                        region_name=self.config.aws_region
+                    ),
+                    "anthropic.claude-3-5-haiku-20241022-v1:0": ChatBedrock(
+                        model_id="anthropic.claude-3-5-haiku-20241022-v1:0",
+                        region_name=self.config.aws_region
+                    )
+                })
+                logger.info("AWS Bedrock models initialized")
             
             # Google Vertex AI
             if ChatVertexAI and self.config.google_project_id:
-                self.providers[LLMProvider.GOOGLE_VERTEX_AI] = self._init_vertexai_models()
-                logger.info("Google Vertex AI provider initialized")
+                self.models.update({
+                    "gemini-1.5-pro": ChatVertexAI(
+                        model="gemini-1.5-pro",
+                        project=self.config.google_project_id,
+                        location=self.config.google_location,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "gemini-1.5-flash": ChatVertexAI(
+                        model="gemini-1.5-flash",
+                        project=self.config.google_project_id,
+                        location=self.config.google_location,
+                        max_retries=0,
+                        timeout=60
+                    )
+                })
+                logger.info("Google Vertex AI models initialized")
             
-            if not self.providers:
-                raise ConfigurationError("No LLM providers configured. Please check your API keys.")
+            if not self.models:
+                raise ConfigurationError("No LLM models configured. Please check your API keys.")
+            
+            logger.info(f"Total models initialized: {len(self.models)}")
                 
         except Exception as e:
-            logger.error(f"Error initializing providers: {e}")
-            raise ConfigurationError(f"Provider initialization failed: {e}")
+            logger.error(f"Error initializing models: {e}")
+            raise ConfigurationError(f"Model initialization failed: {e}")
     
-    def _init_openai_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize OpenAI models."""
-        models = {}
-        model_names = ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
+    def _create_fallback_chains(self) -> None:
+        """Create pre-configured fallback chains using LangChain's with_fallbacks()."""
         
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatOpenAI(
-                    model=model_name,
-                    api_key=self.config.openai_api_key,
-                    timeout=self.config.request_timeout,
-                    max_retries=3
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize OpenAI model {model_name}: {e}")
+        # Cost-optimized chain (cheapest first)
+        cost_optimized_models = self._get_models_by_cost()
+        if cost_optimized_models:
+            primary = cost_optimized_models[0]
+            fallbacks = cost_optimized_models[1:3]  # Top 3 cheapest
+            if fallbacks:
+                self.fallback_chains["cost_optimized"] = primary.with_fallbacks(fallbacks)
+            else:
+                self.fallback_chains["cost_optimized"] = primary
         
-        return models
+        # Performance-optimized chain (fastest first)
+        performance_models = self._get_models_by_performance()
+        if performance_models:
+            primary = performance_models[0]
+            fallbacks = performance_models[1:3]  # Top 3 fastest
+            if fallbacks:
+                self.fallback_chains["performance_optimized"] = primary.with_fallbacks(fallbacks)
+            else:
+                self.fallback_chains["performance_optimized"] = primary
+        
+        # Quality-optimized chain (best models first)
+        quality_models = self._get_models_by_quality()
+        if quality_models:
+            primary = quality_models[0]
+            fallbacks = quality_models[1:3]  # Top 3 quality
+            if fallbacks:
+                self.fallback_chains["quality_optimized"] = primary.with_fallbacks(fallbacks)
+            else:
+                self.fallback_chains["quality_optimized"] = primary
+        
+        # Balanced chain (good balance of cost/performance/quality)
+        balanced_models = self._get_balanced_models()
+        if balanced_models:
+            primary = balanced_models[0]
+            fallbacks = balanced_models[1:4]  # Top 4 balanced
+            if fallbacks:
+                self.fallback_chains["balanced"] = primary.with_fallbacks(fallbacks)
+            else:
+                self.fallback_chains["balanced"] = primary
+        
+        # Default chain (priority order)
+        default_models = self._get_default_priority_models()
+        if default_models:
+            primary = default_models[0]
+            fallbacks = default_models[1:5]  # Top 5 overall
+            if fallbacks:
+                self.fallback_chains["priority_order"] = primary.with_fallbacks(fallbacks)
+            else:
+                self.fallback_chains["priority_order"] = primary
+        
+        logger.info(f"Created {len(self.fallback_chains)} fallback chains")
     
-    def _init_anthropic_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize Anthropic models."""
-        models = {}
-        model_names = [
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022",
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307"
+    def _get_models_by_cost(self) -> List[BaseChatModel]:
+        """Get models ordered by cost (cheapest first)."""
+        cost_priorities = [
+            "llama-3.1-8b-instant",      # Groq - Ultra cheap
+            "llama-3.1-70b-versatile",   # Groq - Cheap
+            "gpt-4o-mini",               # OpenAI - Cost effective
+            "claude-3-5-haiku-20241022", # Anthropic - Fast & cheap
+            "gpt-3.5-turbo",             # OpenAI - Classic cheap
+            "mistral-small-latest",      # Mistral - Small
+            "gemini-1.5-flash",          # Google - Flash
         ]
         
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatAnthropic(
-                    model=model_name,
-                    api_key=self.config.anthropic_api_key,
-                    timeout=self.config.request_timeout,
-                    max_retries=3
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Anthropic model {model_name}: {e}")
-        
-        return models
+        return [self.models[name] for name in cost_priorities if name in self.models]
     
-    def _init_groq_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize Groq models."""
-        models = {}
-        model_names = [
-            "llama-3.1-70b-versatile",
-            "llama-3.1-8b-instant",
-            "llama-3.2-90b-text-preview",
-            "mixtral-8x7b-32768",
-            "gemma-7b-it"
+    def _get_models_by_performance(self) -> List[BaseChatModel]:
+        """Get models ordered by performance (fastest first)."""
+        performance_priorities = [
+            "llama-3.1-8b-instant",      # Groq - Ultra fast
+            "llama-3.1-70b-versatile",   # Groq - Very fast
+            "mixtral-8x7b-32768",        # Groq - Fast
+            "gpt-4o-mini",               # OpenAI - Fast
+            "claude-3-5-haiku-20241022", # Anthropic - Fast
+            "gemini-1.5-flash",          # Google - Flash
+            "gpt-3.5-turbo",             # OpenAI - Fast
         ]
         
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatGroq(
-                    model=model_name,
-                    api_key=self.config.groq_api_key,
-                    timeout=self.config.request_timeout,
-                    max_retries=3
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Groq model {model_name}: {e}")
-        
-        return models
+        return [self.models[name] for name in performance_priorities if name in self.models]
     
-    def _init_mistral_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize Mistral AI models."""
-        models = {}
-        model_names = [
-            "mistral-large-latest",
-            "mistral-medium-latest", 
-            "mistral-small-latest",
-            "open-mixtral-8x7b"
+    def _get_models_by_quality(self) -> List[BaseChatModel]:
+        """Get models ordered by quality (best first)."""
+        quality_priorities = [
+            "gpt-4o",                    # OpenAI - Top quality
+            "claude-3-5-sonnet-20241022", # Anthropic - Excellent
+            "gpt-4o-mini",               # OpenAI - Very good
+            "mistral-large-latest",      # Mistral - Large
+            "gemini-1.5-pro",           # Google - Pro
+            "llama-3.1-70b-versatile",  # Groq - Large
+            "command-r-plus",            # Cohere - Plus
         ]
         
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatMistralAI(
-                    model=model_name,
-                    api_key=self.config.mistral_api_key,
-                    timeout=self.config.request_timeout,
-                    max_retries=3
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Mistral model {model_name}: {e}")
-        
-        return models
+        return [self.models[name] for name in quality_priorities if name in self.models]
     
-    def _init_cohere_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize Cohere models."""
-        models = {}
-        model_names = ["command-r-plus", "command-r", "command", "command-light"]
-        
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatCohere(
-                    model=model_name,
-                    cohere_api_key=self.config.cohere_api_key,
-                    timeout=self.config.request_timeout,
-                    max_retries=3
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Cohere model {model_name}: {e}")
-        
-        return models
-    
-    def _init_bedrock_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize AWS Bedrock models."""
-        models = {}
-        model_names = [
-            "anthropic.claude-3-5-sonnet-20241022-v2:0",
-            "anthropic.claude-3-5-haiku-20241022-v1:0",
-            "anthropic.claude-3-opus-20240229-v1:0",
-            "amazon.titan-text-premier-v1:0",
-            "meta.llama3-70b-instruct-v1:0"
+    def _get_balanced_models(self) -> List[BaseChatModel]:
+        """Get models with good balance of cost/performance/quality."""
+        balanced_priorities = [
+            "gpt-4o-mini",               # OpenAI - Great balance
+            "claude-3-5-haiku-20241022", # Anthropic - Fast & good
+            "llama-3.1-70b-versatile",   # Groq - Fast & capable
+            "gemini-1.5-flash",          # Google - Balanced
+            "gpt-3.5-turbo",             # OpenAI - Reliable
+            "mistral-small-latest",      # Mistral - Efficient
         ]
         
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatBedrock(
-                    model_id=model_name,
-                    region_name=self.config.aws_region,
-                    model_kwargs={
-                        "max_tokens": 4096,
-                        "temperature": 0.7
-                    }
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Bedrock model {model_name}: {e}")
-        
-        return models
+        return [self.models[name] for name in balanced_priorities if name in self.models]
     
-    def _init_vertexai_models(self) -> Dict[str, BaseChatModel]:
-        """Initialize Google Vertex AI models."""
-        models = {}
-        model_names = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"]
+    def _get_default_priority_models(self) -> List[BaseChatModel]:
+        """Get models in default priority order."""
+        default_priorities = [
+            "gpt-4o-mini",               # OpenAI - Best default
+            "claude-3-5-haiku-20241022", # Anthropic - Fast backup
+            "llama-3.1-70b-versatile",   # Groq - Fast & free-ish
+            "gpt-3.5-turbo",             # OpenAI - Reliable
+            "gemini-1.5-flash",          # Google - Alternative
+            "mistral-small-latest",      # Mistral - Backup
+        ]
         
-        for model_name in model_names:
-            try:
-                models[model_name] = ChatVertexAI(
-                    model=model_name,
-                    project=self.config.google_project_id,
-                    location=self.config.google_location,
-                    timeout=self.config.request_timeout,
-                    max_retries=3
-                )
-            except Exception as e:
-                logger.warning(f"Failed to initialize Vertex AI model {model_name}: {e}")
-        
-        return models
-    
-    def _load_model_catalog(self) -> None:
-        """Load model catalog for cost calculation and routing."""
-        from ..models.architecture import get_langchain_model_catalog
-        
-        catalog = get_langchain_model_catalog()
-        for model_config in catalog:
-            self.model_catalog[model_config.name] = model_config
+        return [self.models[name] for name in default_priorities if name in self.models]
     
     def _is_aws_environment(self) -> bool:
         """Check if running in AWS environment."""
@@ -283,7 +346,7 @@ class LangChainProvider:
     
     def process_request(self, request: RequestSchema, request_id: str) -> Dict[str, Any]:
         """
-        Process request with automatic fallback support.
+        Process request using LangChain's native fallback runnable.
         
         Args:
             request: Validated request schema
@@ -293,219 +356,147 @@ class LangChainProvider:
             Response data dictionary
         """
         start_time = time.time()
-        attempts: List[ProviderAttempt] = []
         
-        # Get provider order for fallback
-        provider_order = self._get_provider_order(request)
-        
-        last_error = None
-        
-        for i, (provider, model_name) in enumerate(provider_order):
-            if i >= request.max_fallback_attempts:
-                break
-                
-            attempt_start = time.time()
+        try:
+            # Get the appropriate fallback chain
+            chain = self._get_fallback_chain(request)
             
-            try:
-                logger.info(f"Attempting request {request_id} with {provider.value}:{model_name}")
-                
-                # Get the model
-                model = self._get_model(provider, model_name)
-                
-                # Process the request
-                result = self._process_with_model(model, request, request_id)
-                
-                # Calculate metrics
-                attempt_time = time.time() - attempt_start
-                cost = self._calculate_cost(result, model_name)
-                
-                # Record successful attempt
-                attempts.append(ProviderAttempt(
-                    provider=provider,
-                    model=model_name,
-                    success=True,
-                    error=None,
-                    latency=attempt_time,
-                    cost=cost
-                ))
-                
-                # Build successful response
-                response = {
-                    "content": result["content"],
-                    "provider_used": provider,
-                    "model_used": model_name,
-                    "fallback_attempts": attempts,
-                    "total_tokens": result.get("total_tokens", 0),
-                    "prompt_tokens": result.get("prompt_tokens", 0),
-                    "completion_tokens": result.get("completion_tokens", 0),
-                    "total_cost": cost,
-                    "total_latency": time.time() - start_time,
-                    "provider_latency": attempt_time
-                }
-                
-                # Add structured data if present
-                if "structured_data" in result:
-                    response["structured_data"] = result["structured_data"]
-                
-                logger.info(f"Request {request_id} succeeded with {provider.value}:{model_name}")
-                return response
-                
-            except Exception as e:
-                attempt_time = time.time() - attempt_start
-                error_msg = str(e)
-                last_error = e
-                
-                logger.warning(f"Request {request_id} failed with {provider.value}:{model_name}: {error_msg}")
-                
-                # Record failed attempt
-                attempts.append(ProviderAttempt(
-                    provider=provider,
-                    model=model_name,
-                    success=False,
-                    error=error_msg,
-                    latency=attempt_time,
-                    cost=0.0
-                ))
-                
-                # Continue to next provider if fallback is enabled
-                if not request.enable_fallback:
-                    break
-        
-        # All attempts failed
-        total_time = time.time() - start_time
-        logger.error(f"Request {request_id} failed after {len(attempts)} attempts in {total_time:.2f}s")
-        
-        raise ProviderError(
-            f"All provider attempts failed. Last error: {str(last_error)}",
-            provider="fallback",
-            details={
-                "attempts": len(attempts),
-                "total_time": total_time,
-                "fallback_attempts": [attempt.dict() for attempt in attempts]
+            # Build messages
+            messages = self._build_messages(request)
+            
+            # Configure model parameters
+            model_kwargs = {
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+                "top_p": request.top_p
             }
-        )
-    
-    def _get_provider_order(self, request: RequestSchema) -> List[tuple]:
-        """
-        Get ordered list of (provider, model) pairs for fallback.
-        
-        Args:
-            request: Request schema
-        
-        Returns:
-            List of (provider, model) tuples in priority order
-        """
-        # If specific model requested, try that first
-        if request.model_name:
-            provider = self._find_provider_for_model(request.model_name)
-            if provider:
-                provider_order = [(provider, request.model_name)]
+            
+            if request.top_k:
+                model_kwargs["top_k"] = request.top_k
+            
+            # Configure the chain with parameters
+            configured_chain = chain.bind(**model_kwargs)
+            
+            # Handle structured output
+            if request.structured_output_enabled and request.structured_output_schema:
+                parser = JsonOutputParser()
+                final_chain = configured_chain | parser
+                
+                # Add JSON instruction to the last message
+                json_instruction = f"\n\nPlease respond with valid JSON matching this schema: {request.structured_output_schema}"
+                messages[-1].content += json_instruction
             else:
-                raise ProviderError(f"Model '{request.model_name}' not available in any configured provider")
+                final_chain = configured_chain
+            
+            logger.info(f"Processing request {request_id} with LangChain fallback chain")
+            
+            # Execute the chain - LangChain handles all fallback logic
+            response = final_chain.invoke(messages)
+            
+            # Calculate metrics
+            total_time = time.time() - start_time
+            
+            # Build response
+            if request.structured_output_enabled:
+                result = {
+                    "content": str(response) if response else "",
+                    "structured_data": response,
+                    "total_latency": total_time,
+                    "provider_latency": total_time,
+                    "total_tokens": getattr(response, 'usage', {}).get('total_tokens', 0),
+                    "prompt_tokens": getattr(response, 'usage', {}).get('prompt_tokens', 0),
+                    "completion_tokens": getattr(response, 'usage', {}).get('completion_tokens', 0),
+                    "total_cost": self._estimate_cost(request, 0)  # Will be calculated properly
+                }
+            else:
+                result = {
+                    "content": response.content if hasattr(response, 'content') else str(response),
+                    "total_latency": total_time,
+                    "provider_latency": total_time,
+                    "total_tokens": getattr(response, 'usage', {}).get('total_tokens', 0),
+                    "prompt_tokens": getattr(response, 'usage', {}).get('prompt_tokens', 0),
+                    "completion_tokens": getattr(response, 'usage', {}).get('completion_tokens', 0),
+                    "total_cost": self._estimate_cost(request, 0)  # Will be calculated properly
+                }
+            
+            # Add metadata about the chain used
+            result["chain_type"] = self._get_chain_type_used(request)
+            result["fallback_strategy"] = request.fallback_strategy.value
+            
+            logger.info(f"Request {request_id} completed successfully in {total_time:.2f}s")
+            
+            return result
+            
+        except Exception as e:
+            total_time = time.time() - start_time
+            logger.error(f"Request {request_id} failed after {total_time:.2f}s: {e}")
+            
+            raise ProviderError(
+                f"LangChain fallback chain failed: {str(e)}",
+                provider="langchain",
+                details={
+                    "request_id": request_id,
+                    "total_time": total_time,
+                    "chain_type": self._get_chain_type_used(request),
+                    "available_chains": list(self.fallback_chains.keys())
+                }
+            )
+    
+    def _get_fallback_chain(self, request: RequestSchema) -> Union[RunnableWithFallbacks, BaseChatModel]:
+        """Get the appropriate fallback chain based on request."""
+        
+        # If specific model requested, try to get it directly
+        if request.model_name and request.model_name in self.models:
+            primary_model = self.models[request.model_name]
+            
+            if request.enable_fallback:
+                # Create a custom fallback chain for this specific model
+                fallback_models = self._get_fallback_models_for_specific(request.model_name, request.fallback_strategy)
+                if fallback_models:
+                    return primary_model.with_fallbacks(fallback_models)
+            
+            return primary_model
+        
+        # Use pre-configured fallback chains based on strategy
+        if not request.enable_fallback:
+            # No fallback - use first available model
+            if self.models:
+                return list(self.models.values())[0]
+            else:
+                raise ProviderError("No models available")
+        
+        # Get chain based on fallback strategy
+        strategy_name = request.fallback_strategy.value
+        
+        if strategy_name in self.fallback_chains:
+            return self.fallback_chains[strategy_name]
+        
+        # Fallback to default chain
+        if "balanced" in self.fallback_chains:
+            return self.fallback_chains["balanced"]
+        elif "priority_order" in self.fallback_chains:
+            return self.fallback_chains["priority_order"]
         else:
-            provider_order = []
-        
-        # Add fallback providers based on strategy
-        if request.enable_fallback:
-            fallback_providers = self._get_fallback_providers(request)
-            provider_order.extend(fallback_providers)
-        
-        return provider_order[:request.max_fallback_attempts]
+            # Last resort - use first available model
+            return list(self.models.values())[0]
     
-    def _find_provider_for_model(self, model_name: str) -> Optional[LLMProvider]:
-        """Find which provider has the specified model."""
-        for provider, models in self.providers.items():
-            if model_name in models:
-                return provider
-        return None
-    
-    def _get_fallback_providers(self, request: RequestSchema) -> List[tuple]:
-        """Get fallback provider list based on strategy."""
-        fallback_list = []
+    def _get_fallback_models_for_specific(self, model_name: str, strategy: FallbackStrategy) -> List[BaseChatModel]:
+        """Get fallback models for a specific primary model."""
+        # Get all models except the primary one
+        available_models = {name: model for name, model in self.models.items() if name != model_name}
         
-        # Use provider preference if specified
-        if request.provider_preference:
-            providers_to_try = request.provider_preference
-        else:
-            # Default order based on strategy
-            if request.fallback_strategy == FallbackStrategy.COST_OPTIMIZED:
-                providers_to_try = [LLMProvider.GROQ, LLMProvider.OPENAI, LLMProvider.ANTHROPIC]
-            elif request.fallback_strategy == FallbackStrategy.PERFORMANCE_OPTIMIZED:
-                providers_to_try = [LLMProvider.GROQ, LLMProvider.OPENAI, LLMProvider.ANTHROPIC]
-            else:  # PRIORITY_ORDER
-                providers_to_try = [LLMProvider.OPENAI, LLMProvider.ANTHROPIC, LLMProvider.GROQ, LLMProvider.MISTRAL_AI, LLMProvider.COHERE]
-        
-        # Build fallback list with available models
-        for provider in providers_to_try:
-            if provider in self.providers:
-                models = list(self.providers[provider].keys())
-                if models:
-                    # Get best model for this provider
-                    best_model = self._get_best_model_for_provider(provider, request.fallback_strategy)
-                    if best_model:
-                        fallback_list.append((provider, best_model))
-        
-        return fallback_list
-    
-    def _get_best_model_for_provider(self, provider: LLMProvider, strategy: FallbackStrategy) -> Optional[str]:
-        """Get the best model for a provider based on strategy."""
-        available_models = list(self.providers[provider].keys())
-        
-        if not available_models:
-            return None
-        
-        # Filter models by strategy
         if strategy == FallbackStrategy.COST_OPTIMIZED:
-            # Find cheapest model
-            cheapest_model = None
-            min_cost = float('inf')
-            
-            for model_name in available_models:
-                model_config = self.model_catalog.get(model_name)
-                if model_config:
-                    total_cost = model_config.cost_per_1m_input_tokens + model_config.cost_per_1m_output_tokens
-                    if total_cost < min_cost:
-                        min_cost = total_cost
-                        cheapest_model = model_name
-            
-            return cheapest_model or available_models[0]
-        
+            fallback_order = self._get_models_by_cost()
         elif strategy == FallbackStrategy.PERFORMANCE_OPTIMIZED:
-            # Find fastest model
-            for model_name in available_models:
-                model_config = self.model_catalog.get(model_name)
-                if model_config and model_config.latency_category == "ultra_fast":
-                    return model_name
-            
-            # Fallback to first available
-            return available_models[0]
+            fallback_order = self._get_models_by_performance()
+        else:  # PRIORITY_ORDER or others
+            fallback_order = self._get_default_priority_models()
         
-        else:  # PRIORITY_ORDER
-            # Return highest priority model
-            best_model = None
-            highest_priority = 0
-            
-            for model_name in available_models:
-                model_config = self.model_catalog.get(model_name)
-                if model_config and model_config.priority >= highest_priority:
-                    highest_priority = model_config.priority
-                    best_model = model_name
-            
-            return best_model or available_models[0]
+        # Return models that are available and not the primary
+        return [model for model in fallback_order if model in available_models.values()][:3]
     
-    def _get_model(self, provider: LLMProvider, model_name: str) -> BaseChatModel:
-        """Get model instance for provider and model name."""
-        if provider not in self.providers:
-            raise ProviderError(f"Provider {provider.value} not configured")
-        
-        if model_name not in self.providers[provider]:
-            raise ProviderError(f"Model {model_name} not available in provider {provider.value}")
-        
-        return self.providers[provider][model_name]
-    
-    def _process_with_model(self, model: BaseChatModel, request: RequestSchema, request_id: str) -> Dict[str, Any]:
-        """Process request with a specific model."""
-        # Build messages
+    def _build_messages(self, request: RequestSchema) -> List:
+        """Build LangChain messages from request."""
         messages = []
         
         if request.system_prompt:
@@ -513,91 +504,75 @@ class LangChainProvider:
         
         messages.append(HumanMessage(content=request.prompt))
         
-        # Configure model parameters
-        model_kwargs = {
-            "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
-            "top_p": request.top_p
-        }
-        
-        if request.top_k:
-            model_kwargs["top_k"] = request.top_k
-        
-        # Create runnable with parameters
-        configured_model = model.bind(**model_kwargs)
-        
-        # Process request
-        if request.structured_output_enabled and request.structured_output_schema:
-            # Use structured output
-            parser = JsonOutputParser()
-            chain = configured_model | parser
-            
-            # Add instruction for JSON output
-            json_instruction = f"\n\nPlease respond with valid JSON matching this schema: {request.structured_output_schema}"
-            messages[-1].content += json_instruction
-            
-            response = chain.invoke(messages)
-            
-            return {
-                "content": str(response),
-                "structured_data": response,
-                "total_tokens": getattr(response, 'usage', {}).get('total_tokens', 0),
-                "prompt_tokens": getattr(response, 'usage', {}).get('prompt_tokens', 0),
-                "completion_tokens": getattr(response, 'usage', {}).get('completion_tokens', 0)
-            }
-        else:
-            # Standard text response
-            response = configured_model.invoke(messages)
-            
-            return {
-                "content": response.content,
-                "total_tokens": getattr(response, 'usage', {}).get('total_tokens', 0),
-                "prompt_tokens": getattr(response, 'usage', {}).get('prompt_tokens', 0),
-                "completion_tokens": getattr(response, 'usage', {}).get('completion_tokens', 0)
-            }
+        return messages
     
-    def _calculate_cost(self, result: Dict[str, Any], model_name: str) -> float:
-        """Calculate cost for the request."""
-        model_config = self.model_catalog.get(model_name)
-        if not model_config:
-            return 0.0
+    def _get_chain_type_used(self, request: RequestSchema) -> str:
+        """Get the type of chain that would be used for this request."""
+        if request.model_name and request.model_name in self.models:
+            return f"specific_model_{request.model_name}"
         
-        prompt_tokens = result.get("prompt_tokens", 0)
-        completion_tokens = result.get("completion_tokens", 0)
+        if not request.enable_fallback:
+            return "no_fallback"
         
-        input_cost = (prompt_tokens / 1_000_000) * model_config.cost_per_1m_input_tokens
-        output_cost = (completion_tokens / 1_000_000) * model_config.cost_per_1m_output_tokens
+        return request.fallback_strategy.value
+    
+    def _estimate_cost(self, request: RequestSchema, tokens: int) -> float:
+        """Estimate cost for the request (simplified)."""
+        # This would need proper implementation based on actual usage
+        # For now, return a minimal estimate
+        return 0.001  # $0.001 baseline
+    
+    def get_available_models(self) -> Dict[str, Any]:
+        """Get information about available models and chains."""
+        return {
+            "total_models": len(self.models),
+            "available_models": list(self.models.keys()),
+            "fallback_chains": list(self.fallback_chains.keys()),
+            "models_by_provider": self._group_models_by_provider()
+        }
+    
+    def _group_models_by_provider(self) -> Dict[str, List[str]]:
+        """Group models by their provider."""
+        groups = {}
+        for model_name in self.models.keys():
+            if model_name.startswith("gpt-"):
+                provider = "openai"
+            elif model_name.startswith("claude-"):
+                provider = "anthropic"
+            elif model_name.startswith("llama-") or model_name.startswith("mixtral-"):
+                provider = "groq"
+            elif model_name.startswith("mistral-"):
+                provider = "mistral"
+            elif model_name.startswith("command-"):
+                provider = "cohere"
+            elif model_name.startswith("gemini-"):
+                provider = "google"
+            elif "anthropic." in model_name:
+                provider = "bedrock"
+            else:
+                provider = "unknown"
+            
+            if provider not in groups:
+                groups[provider] = []
+            groups[provider].append(model_name)
         
-        return round(input_cost + output_cost, 6)
+        return groups
     
     def health_check(self) -> Dict[str, Any]:
-        """Perform health check on all providers."""
-        results = {
-            "healthy": True,
-            "providers": {},
-            "total_models": 0,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-        for provider, models in self.providers.items():
-            try:
-                provider_health = {
-                    "healthy": True,
-                    "models_available": list(models.keys()),
-                    "model_count": len(models)
-                }
-                
-                results["providers"][provider.value] = provider_health
-                results["total_models"] += len(models)
-                
-            except Exception as e:
-                logger.error(f"Health check failed for {provider.value}: {e}")
-                results["providers"][provider.value] = {
-                    "healthy": False,
-                    "error": str(e),
-                    "models_available": [],
-                    "model_count": 0
-                }
-                results["healthy"] = False
-        
-        return results
+        """Perform health check on the provider."""
+        try:
+            return {
+                "healthy": True,
+                "total_models": len(self.models),
+                "available_models": list(self.models.keys()),
+                "fallback_chains": list(self.fallback_chains.keys()),
+                "timestamp": datetime.utcnow().isoformat(),
+                "langchain_fallback_enabled": True
+            }
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return {
+                "healthy": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
