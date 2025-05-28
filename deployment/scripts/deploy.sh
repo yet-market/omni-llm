@@ -140,28 +140,28 @@ else
     print_warning ".env file not found, using environment-specific config only"
 fi
 
-# Prompt for API keys if not provided
-if [ -z "$OPENAI_API_KEY" ]; then
-    read -sp "Enter your OpenAI API Key (or press Enter to skip): " OPENAI_API_KEY
-    echo
-fi
-
+# Generate API key if not provided
 if [ -z "$API_KEY_VALUE" ]; then
-    # Generate a random API key if not provided
     API_KEY_VALUE="omni-$(openssl rand -hex 16)"
     print_warning "Generated API key: $API_KEY_VALUE"
     print_warning "Please save this API key securely!"
+fi
+
+# Validate that we have at least one LLM provider API key
+if [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$GROQ_API_KEY" ]; then
+    print_error "At least one LLM provider API key is required (OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY)"
+    print_error "Please set them in your .env file or environment variables"
+    exit 1
 fi
 
 print_status "Deploying CloudFormation stack..."
 
 # Deploy CloudFormation stack
 aws cloudformation deploy \
-    --template-file deployment/cloudformation/simple-infrastructure.yaml \
+    --template-file deployment/cloudformation/minimal-infrastructure.yaml \
     --stack-name "$STACK_NAME" \
     --parameter-overrides \
         Environment="$ENVIRONMENT" \
-        OpenAIAPIKey="$OPENAI_API_KEY" \
         APIKeyValue="$API_KEY_VALUE" \
         LambdaMemorySize="$LAMBDA_MEMORY_SIZE" \
         APIThrottleRate="$API_THROTTLE_RATE" \
@@ -292,12 +292,7 @@ API_KEY_ID=$(aws cloudformation describe-stacks \
     --query "Stacks[0].Outputs[?OutputKey=='APIKey'].OutputValue" \
     --output text)
 
-S3_BUCKET=$(aws cloudformation describe-stacks \
-    --stack-name "$STACK_NAME" \
-    --region "$AWS_REGION" \
-    --profile "$AWS_PROFILE" \
-    --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
-    --output text)
+# No S3 bucket output in minimal infrastructure
 
 # Test the deployment
 print_status "Testing deployment..."
@@ -332,7 +327,7 @@ echo "Stack Name:       $STACK_NAME"
 echo "Region:           $AWS_REGION"
 echo "API Endpoint:     $API_ENDPOINT"
 echo "API Key:          $API_KEY_VALUE"
-echo "S3 Bucket:        $S3_BUCKET"
+echo "S3 Access:        Read-only access to user-provided S3 paths"
 echo "Lambda Function:  $LAMBDA_FUNCTION_NAME"
 echo
 echo "Test your deployment:"
