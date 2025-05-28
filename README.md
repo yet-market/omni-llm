@@ -78,32 +78,26 @@ cd omni-llm
 
 ### 2. Environment Setup
 ```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate     # Windows
+# Interactive setup (recommended)
+./scripts/setup-env.sh
 
-# Install dependencies
-pip install -r requirements-dev.txt
-
-# Copy and configure environment variables
-cp ENV_TEMPLATE.env .env
-# Edit .env with your API keys and configurations
+# Or manual setup
+./scripts/setup-dev.sh
 ```
 
 ### 3. Local Testing
 ```bash
-# Run local development server
-python src/lambda_function.py
+# Start local development server
+./scripts/start-dev.sh
 
 # Test basic functionality
 curl -X POST http://localhost:8000/invoke \
   -H "Content-Type: application/json" \
+  -H "x-api-key: dev-key-12345" \
   -d '{
     "prompt": "Explain quantum computing in simple terms",
     "model_provider": "openai",
-    "model_name": "gpt-4"
+    "model_name": "gpt-3.5-turbo"
   }'
 ```
 
@@ -128,16 +122,12 @@ curl -X POST http://localhost:8000/invoke \
   }'
 ```
 
-### 5. Deploy to AWS
+### 4. Deploy to AWS
 ```bash
-# Build and deploy
-./deployment/scripts/deploy.sh
+# Deploy to development environment (uses yet profile, eu-west-2)
+./deployment/scripts/deploy.sh dev
 
-# Or use CloudFormation
-aws cloudformation deploy \
-  --template-file deployment/cloudformation/infrastructure.yaml \
-  --stack-name omni-llm \
-  --capabilities CAPABILITY_IAM
+# Your API keys from .env are automatically loaded as Lambda environment variables
 ```
 
 ---
@@ -145,11 +135,11 @@ aws cloudformation deploy \
 ## 📖 Documentation
 
 - [📋 Complete Technical Specification](SPECIFICATION.md)
-- [🚀 Deployment Guide](docs/DEPLOYMENT.md)
-- [⚙️ Configuration Guide](docs/CONFIGURATION.md)
-- [🔌 API Documentation](docs/API.md)
-- [💡 Examples](examples/)
-- [🔧 Development Guide](docs/DEVELOPMENT.md)
+- [🚀 Deployment Guide](DEPLOYMENT.md)
+- [⚙️ Environment Configuration](ENV_TEMPLATE.env)
+- [🤝 Contributing Guidelines](CONTRIBUTING.md)
+- [📝 Development Instructions](CLAUDE.md)
+- [📊 Project Changelog](CHANGELOG.md)
 
 ---
 
