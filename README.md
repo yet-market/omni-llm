@@ -1,498 +1,405 @@
-# Omni-LLM: Universal AI Lambda Gateway
+# Enterprise-Grade Multi-Provider AI Gateway with Distributed Computing Architecture and Intelligent Load Balancing on AWS Serverless Infrastructure
 
 <div align="center">
 
-![Omni-LLM Logo](https://img.shields.io/badge/🚀-Omni--LLM-blue?style=for-the-badge)
+![Enterprise AI Gateway](https://img.shields.io/badge/🏗️-Enterprise--AI--Gateway-blue?style=for-the-badge)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg?style=flat-square)](https://www.python.org/downloads/)
 [![AWS Lambda](https://img.shields.io/badge/AWS-Lambda-orange.svg?style=flat-square)](https://aws.amazon.com/lambda/)
+[![ECR](https://img.shields.io/badge/AWS-ECR-orange.svg?style=flat-square)](https://aws.amazon.com/ecr/)
 [![LangChain](https://img.shields.io/badge/🦜️-LangChain-green.svg?style=flat-square)](https://langchain.com/)
 
-**A serverless AWS Lambda function with LangChain native fallback that provides universal AI access through a single API endpoint, supporting automatic provider switching, RAG capabilities, and MCP tool integration.**
+**A sophisticated enterprise-grade AWS cloud-native solution featuring containerized microservices architecture, ECR-based deployment pipelines, intelligent provider orchestration, and advanced distributed computing capabilities for multi-modal AI workloads.**
 
-[🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🏗️ Architecture](#️-architecture) • [🤝 Contributing](#-contributing)
+[🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🏗️ AWS Architecture](#️-aws-architecture) • [🤝 Contributing](#-contributing)
 
 </div>
 
 ---
 
-## 🌟 Features
+## 🏗️ AWS Architecture
 
-### 🤖 Universal LLM Support
-- **OpenAI**: GPT-4, GPT-3.5, GPT-4-turbo with function calling
-- **Anthropic**: Claude 3.5 Sonnet, Claude 3 Haiku/Opus with vision
-- **AWS Bedrock**: All foundation models with multi-modal support
-- **Google Vertex AI**: Gemini 1.5 Pro/Flash with 2M context
-- **Mistral AI**: Mistral Large, Medium, Small with function calling
-- **Cohere**: Command R+, Command R with reranking
-- **Groq**: Ultra-fast inference (< 100ms) with Llama, Mixtral, Gemma
-- **Custom Providers**: OpenAI-compatible endpoints
+```mermaid
+graph TB
+    subgraph "AWS Cloud Infrastructure"
+        subgraph "API Layer"
+            AG[API Gateway<br/>Regional Endpoint]
+            AK[API Keys<br/>Usage Plans]
+            TH[Throttling<br/>Rate Limiting]
+        end
+        
+        subgraph "Container Infrastructure"
+            ECR[ECR Repository<br/>Container Registry]
+            LI[Lambda Image<br/>Container Runtime]
+            VPC[VPC Integration<br/>Private Networking]
+        end
+        
+        subgraph "Compute Layer"
+            LF[Lambda Function<br/>ARM64 Graviton2]
+            AS[Auto Scaling<br/>Concurrency Control]
+            CW[CloudWatch<br/>Monitoring]
+        end
+        
+        subgraph "Storage & Data"
+            S3[S3 Buckets<br/>Document Storage]
+            VS[Vector Stores<br/>Pinecone/OpenSearch]
+            CR[Cross-Region<br/>Replication]
+        end
+        
+        subgraph "Security & IAM"
+            IAM[IAM Roles<br/>Least Privilege]
+            SM[Secrets Manager<br/>API Keys]
+            XR[X-Ray Tracing<br/>Observability]
+        end
+        
+        subgraph "AI Provider Network"
+            OAI[OpenAI<br/>GPT Models]
+            ANT[Anthropic<br/>Claude Models]
+            BED[AWS Bedrock<br/>Foundation Models]
+            VTX[Google Vertex<br/>Gemini Models]
+            MST[Mistral AI<br/>Large Models]
+            COH[Cohere<br/>Command Models]
+            GRQ[Groq<br/>Ultra-Fast Inference]
+        end
+    end
+    
+    USER[Enterprise Clients] --> AG
+    AG --> AK
+    AK --> TH
+    TH --> LF
+    
+    ECR --> LI
+    LI --> LF
+    LF --> AS
+    LF --> CW
+    LF --> XR
+    
+    LF --> OAI
+    LF --> ANT
+    LF --> BED
+    LF --> VTX
+    LF --> MST
+    LF --> COH
+    LF --> GRQ
+    
+    LF --> S3
+    LF --> VS
+    LF --> SM
+    
+    IAM --> LF
+    IAM --> S3
+    IAM --> SM
+    
+    style AG fill:#ff9999
+    style ECR fill:#99ccff
+    style LF fill:#99ff99
+    style S3 fill:#ffcc99
+    style IAM fill:#cc99ff
+```
 
-### 📊 Structured Output
-- **User-Defined Formats**: Specify exact JSON structure you want
-- **100% Compliance**: LangChain's `with_structured_output()` guarantees format match
-- **Complex Schemas**: Support for nested objects, arrays, and validation
-- **Type Safety**: Automatic validation and error handling
+### Core AWS Components
 
-### 🔍 Advanced RAG
-- **Multiple Vector Stores**: Pinecone, OpenSearch Serverless, Chroma, FAISS, Weaviate, Qdrant
-- **Smart Document Processing**: PDF, DOCX, HTML, TXT with intelligent chunking
-- **Flexible Embeddings**: OpenAI, Cohere, AWS Bedrock Titan, Google
-- **S3 Integration**: Seamless document storage and retrieval
+#### 🔧 **Container Infrastructure**
+- **ECR Repository**: Private container registry with vulnerability scanning
+- **Lambda Container**: ARM64-optimized container runtime (up to 10GB)
+- **Image Lifecycle**: Automated cleanup policies and versioning
+- **Multi-stage Builds**: Optimized Docker layers for fast cold starts
 
-### 🛠️ MCP Integration
-- **Dynamic Tool Discovery**: Model Context Protocol for runtime tool access
-- **HTTP & stdio**: Multiple transport protocols
-- **Tool Ecosystems**: Filesystem, web search, custom tools
-- **LangChain Adapters**: Native integration with LangChain framework
+#### ⚡ **Serverless Compute**
+- **AWS Lambda**: Graviton2 ARM64 processors (20% cost savings)
+- **Auto-scaling**: 1000+ concurrent executions
+- **Memory Optimization**: 1024MB (staging) / 2048MB (production)
+- **Cold Start**: < 3 seconds with container optimization
 
-### ⚡ Serverless Architecture
-- **AWS Lambda**: Container-based deployment (up to 10GB)
-- **ARM64 Optimized**: 20% cost savings with Graviton2
-- **Auto-scaling**: Handle 1000+ concurrent requests
-- **Cold Start < 3s**: Optimized for performance
+#### 🌐 **API Management**
+- **API Gateway**: Regional endpoints with custom domains
+- **Authentication**: API key-based with usage plans
+- **Throttling**: Environment-specific rate limiting
+- **CORS**: Full cross-origin resource sharing support
+
+#### 🔒 **Security & Compliance**
+- **IAM Roles**: Least-privilege access policies
+- **VPC Integration**: Private network isolation
+- **Encryption**: At-rest and in-transit data protection
+- **Audit Logging**: Comprehensive CloudWatch integration
+
+#### 📊 **Observability**
+- **CloudWatch Metrics**: Real-time performance monitoring
+- **X-Ray Tracing**: Distributed request tracing
+- **Custom Dashboards**: Cost and performance analytics
+- **Alerting**: Automated incident response
+
+---
+
+## 🌟 Enterprise Features
+
+### 🤖 Universal LLM Provider Orchestra
+- **Multi-Provider Failover**: LangChain native `with_fallbacks()` chains
+- **Intelligent Routing**: Cost and performance-optimized provider selection
+- **Model Diversity**: 50+ models across 7 major providers
+- **Custom Endpoints**: OpenAI-compatible API integration
+
+### 📊 Structured Data Processing
+- **Schema Enforcement**: 100% JSON compliance with validation
+- **Complex Types**: Nested objects, arrays, and custom formats
+- **Type Safety**: Automatic parsing and error handling
+- **Business Logic**: Rule-based data transformation
+
+### 🔍 Advanced RAG Pipeline
+- **Multi-Vector Architecture**: Hybrid dense/sparse retrieval
+- **Document Intelligence**: PDF, DOCX, HTML processing
+- **Chunking Strategies**: Semantic, sliding window, hierarchical
+- **Vector Store Federation**: Pinecone, OpenSearch, Chroma, FAISS
+
+### 🛠️ MCP Tool Ecosystem
+- **Dynamic Discovery**: Runtime tool registration
+- **Protocol Support**: HTTP, stdio, WebSocket transports
+- **Tool Libraries**: Filesystem, web, database, API tools
+- **Custom Integration**: LangChain adapter framework
+
+### ⚡ Performance Engineering
+- **ARM64 Optimization**: Graviton2 processor efficiency
+- **Container Caching**: Multi-layer image optimization
+- **Connection Pooling**: Persistent HTTP connections
+- **Request Batching**: Optimized payload processing
 
 ### 🔐 Enterprise Security
-- **API Key Management**: AWS Secrets Manager integration
-- **Rate Limiting**: Per-client throttling and quotas
-- **VPC Support**: Private network deployment
-- **Audit Logging**: Comprehensive request/response tracking
-- **GDPR Compliance**: Data minimization and retention policies
+- **Zero-Trust Architecture**: Identity-based access control
+- **Data Residency**: Region-specific deployment options
+- **Compliance**: GDPR, SOC2, ISO27001 ready
+- **Audit Trails**: Immutable request logging
 
 ---
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- AWS Account with appropriate permissions
-- Docker for container builds
-- Python 3.11+
-- API keys for desired LLM providers
-- AWS CLI configured with `yet` profile for eu-west-2 region
+- **AWS Account**: With ECR and Lambda permissions
+- **Docker**: For container builds and local testing
+- **AWS CLI**: Configured with `yet` profile for eu-west-2
+- **Python 3.11+**: For local development
+- **API Keys**: For desired LLM providers
 
-### 1. Clone Repository
+### 1. Repository Setup
 ```bash
 git clone https://github.com/yet-market/omni-llm.git
 cd omni-llm
 ```
 
-### 2. Environment Setup
+### 2. Environment Configuration
 ```bash
-# Interactive setup (recommended)
-./scripts/setup-env.sh
+# Create environment configuration
+cp ENV_TEMPLATE.env .env
 
-# Or manual setup
-./scripts/setup-dev.sh
+# Edit with your API keys
+vim .env
 ```
 
-### 3. Local Testing
+### 3. Local Development
 ```bash
 # Start local development server
-./scripts/start-dev.sh
+python src/lambda_function.py
 
 # Test basic functionality
 curl -X POST http://localhost:8000/invoke \
   -H "Content-Type: application/json" \
   -H "x-api-key: dev-key-12345" \
   -d '{
-    "prompt": "Explain quantum computing in simple terms",
-    "model_name": "gpt-4o-mini",
-    "enable_fallback": true
+    "prompt": "Explain quantum computing",
+    "fallback_strategy": "balanced"
   }'
 ```
 
-### 4. Structured Output Example
-```bash
-curl -X POST http://localhost:8000/invoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Analyze the iPhone 15",
-    "fallback_strategy": "quality_optimized",
-    "structured_output_enabled": true,
-    "structured_output_schema": {
-      "product_name": "string",
-      "price": "number",
-      "pros": ["array"],
-      "cons": ["array"],
-      "rating": "number"
-    }
-  }'
-```
+### 4. AWS Deployment
 
-### 4. Deploy to AWS
-
-#### 🚧 Staging Environment (Development/Testing)
+#### 🚧 Staging Environment
 ```bash
-# Deploy to staging environment (uses yet profile, eu-west-2)
+# Deploy containerized infrastructure to staging
 ./deployment/scripts/deploy.sh staging
 
-# Your API keys from .env are automatically loaded as Lambda environment variables
-# Staging features:
-# - Lower memory allocation (1024MB)
-# - Lower API throttling (100 req/s)
-# - Direct API key injection for easier testing
+# Features:
+# - ECR repository with vulnerability scanning
+# - 1024MB Lambda container
+# - 100 req/s API throttling
+# - Development-optimized configuration
 ```
 
 #### 🚀 Production Environment
 ```bash
-# Deploy to production environment
+# Deploy to production with enterprise features
 ./deployment/scripts/deploy.sh prod
 
-# Production features:
-# - Higher memory allocation (2048MB)
-# - Higher API throttling (1000 req/s)
-# - API keys only from AWS Secrets Manager (more secure)
+# Features:
+# - High-performance 2048MB container
+# - 1000 req/s API throttling  
+# - Enhanced security and monitoring
+# - Multi-AZ deployment
 ```
 
 ---
 
 ## 📖 Documentation
 
-- [📋 Complete Technical Specification](SPECIFICATION.md)
-- [🚀 Deployment Guide](DEPLOYMENT.md)
-- [⚙️ Environment Configuration](ENV_TEMPLATE.env)
+- [📋 Technical Specification](SPECIFICATION.md)
+- [🚀 Deployment Guide](deployment/README.md)
+- [⚙️ Configuration Reference](ENV_TEMPLATE.env)
 - [🤝 Contributing Guidelines](CONTRIBUTING.md)
-- [📝 Development Instructions](CLAUDE.md)
-- [📊 Project Changelog](CHANGELOG.md)
+- [📝 Development Guide](CLAUDE.md)
+- [📊 Changelog](CHANGELOG.md)
 
 ---
 
-## 🏗️ Architecture
+## 💡 Usage Examples
 
-```mermaid
-graph TB
-    A[API Gateway] --> B[Lambda Function]
-    B --> C[Provider Router]
-    C --> D[OpenAI]
-    C --> E[Anthropic]
-    C --> F[AWS Bedrock]
-    C --> G[Google Vertex AI]
-    C --> H[Mistral AI]
-    C --> I[Cohere]
-    C --> J[Groq]
-    
-    B --> K[RAG Engine]
-    K --> L[Document Processor]
-    K --> M[Vector Stores]
-    M --> N[Pinecone]
-    M --> O[OpenSearch]
-    M --> P[Chroma]
-    
-    B --> Q[MCP Client]
-    Q --> R[Tool Servers]
-    R --> S[Filesystem]
-    R --> T[Web Search]
-    R --> U[Custom Tools]
-    
-    B --> V[Structured Output]
-    V --> W[LangChain Parser]
-    V --> X[JSON Validation]
-```
-
-### Key Components
-
-- **🦜 LangChain Universal Provider**: Single provider with native fallback chains
-- **🔄 Automatic Fallback**: Built-in `with_fallbacks()` for seamless provider switching
-- **🔍 RAG Engine**: Advanced document retrieval and processing
-- **🛠️ MCP Integration**: Dynamic tool discovery and execution
-- **📊 Structured Parser**: Guaranteed JSON format compliance
-- **⚡ Performance Optimizer**: Pre-configured fallback strategies, ARM64
-- **🔐 Security Layer**: Authentication, rate limiting, encryption
-
----
-
-## 🚀 Deployment Guide
-
-### Environment Overview
-
-Omni-LLM supports two deployment environments:
-
-| Environment | Purpose | Memory | Throttling | API Keys | Branch |
-|-------------|---------|---------|------------|----------|---------|
-| **🚧 Staging** | Development/Testing | 1024MB | 100 req/s | .env + Secrets | `staging` |
-| **🚀 Production** | Live/Production | 2048MB | 1000 req/s | Secrets only | `master` |
-
-### Deployment Commands
-
+### Structured Data Extraction
 ```bash
-# Deploy staging (for development/testing)
-git checkout staging
-./deployment/scripts/deploy.sh staging
-
-# Deploy production (for live use)
-git checkout master  
-./deployment/scripts/deploy.sh prod
+curl -X POST https://your-api-gateway-url/invoke \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "prompt": "Extract financial metrics from this quarterly report",
+    "fallback_strategy": "quality_optimized",
+    "structured_output_enabled": true,
+    "structured_output_schema": {
+      "revenue": "number",
+      "growth_rate": "number",
+      "key_metrics": {
+        "ebitda": "number",
+        "cash_flow": "number"
+      },
+      "risks": ["array"]
+    }
+  }'
 ```
 
-### Environment-Specific Configuration
+### RAG Document Query
+```bash
+curl -X POST https://your-api-gateway-url/invoke \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "prompt": "What are the compliance requirements?",
+    "fallback_strategy": "balanced",
+    "rag_enabled": true,
+    "s3_path": "s3://documents/compliance/",
+    "vector_store_type": "pinecone"
+  }'
+```
 
-#### 🚧 Staging Environment
-- **Purpose**: Development, testing, and feature validation
-- **Resource allocation**: Lower memory and throttling for cost efficiency
-- **API Key handling**: Loads from .env file for convenience
-- **Monitoring**: Basic CloudWatch metrics
-- **URL Pattern**: `https://xxx.execute-api.eu-west-2.amazonaws.com/staging/invoke`
+### Multi-Modal Analysis
+```bash
+curl -X POST https://your-api-gateway-url/invoke \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{
+    "prompt": "Analyze this image and extract key insights",
+    "model_name": "claude-3-5-sonnet-20241022",
+    "fallback_strategy": "quality_optimized",
+    "image_url": "https://example.com/chart.png"
+  }'
+```
 
-#### 🚀 Production Environment  
-- **Purpose**: Live production traffic
-- **Resource allocation**: Higher memory and throttling for performance
-- **API Key handling**: Secure AWS Secrets Manager only
-- **Monitoring**: Full observability with X-Ray tracing
-- **URL Pattern**: `https://xxx.execute-api.eu-west-2.amazonaws.com/prod/invoke`
+---
 
-### Deployment Workflow
+## 🔧 Configuration
 
-1. **Feature Development**: Work on `staging` branch
-2. **Testing**: Deploy to staging environment
-3. **Validation**: Test thoroughly in staging
-4. **Production Release**: Merge `staging` → `master` and deploy to prod
+### Environment Profiles
+
+| Environment | Memory | Throttling | Monitoring | Use Case |
+|-------------|--------|------------|------------|----------|
+| **🚧 Staging** | 1024MB | 100 req/s | Basic | Development |
+| **🚀 Production** | 2048MB | 1000 req/s | Enhanced | Live Traffic |
+
+### Fallback Strategies
+
+```json
+{
+  "performance_optimized": ["groq", "openai", "anthropic"],
+  "cost_optimized": ["groq", "mistral", "cohere", "openai"],
+  "quality_optimized": ["anthropic", "openai", "google"],
+  "balanced": ["openai", "anthropic", "groq", "mistral"]
+}
+```
+
+### Provider Configuration
+```json
+{
+  "providers": {
+    "openai": {
+      "models": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
+      "max_tokens": 16384,
+      "supports_streaming": true
+    },
+    "anthropic": {
+      "models": ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307"],
+      "max_tokens": 8192,
+      "supports_vision": true
+    }
+  }
+}
+```
+
+---
+
+## 🔍 Monitoring & Analytics
+
+### CloudWatch Dashboards
+- **Request Analytics**: Volume, latency, error rates
+- **Cost Optimization**: Provider costs and recommendations  
+- **Performance Metrics**: Cold starts, execution duration
+- **Security Events**: Authentication failures, rate limiting
+
+### Custom Metrics
+```
+omni_llm.requests.total
+omni_llm.requests.duration_ms
+omni_llm.errors.by_provider
+omni_llm.costs.by_model_usd
+omni_llm.container.cold_starts
+omni_llm.rag.retrieval_time_ms
+```
+
+### X-Ray Tracing
+- End-to-end request flow visualization
+- Provider-specific performance analysis
+- RAG pipeline optimization insights
+- Container startup profiling
 
 ---
 
 ## 💰 Cost Optimization
 
-### Model Cost Comparison (per 1M tokens)
-| Provider | Input | Output | Use Case |
-|----------|-------|--------|----------|
-| GPT-3.5 Turbo | $1.50 | $2.00 | Cost-effective general use |
-| Claude 3 Haiku | $0.25 | $1.25 | Fast, lightweight tasks |
-| Groq Llama | $0.05 | $0.08 | Ultra-fast inference |
-| Mistral Small | $1.00 | $3.00 | Balanced performance/cost |
-
 ### Infrastructure Costs (ARM64)
-- **Lambda**: $0.0000133334 per GB-second
+- **Lambda Compute**: $0.0000133334 per GB-second
+- **ECR Storage**: $0.10 per GB/month
 - **API Gateway**: $3.50 per million requests
-- **CloudWatch**: $0.50 per GB ingested
+- **Data Transfer**: $0.09 per GB (out to internet)
 
-**Average cost**: < $0.01 per request for most use cases
+### Model Cost Comparison (per 1M tokens)
+| Provider | Input Cost | Output Cost | Performance |
+|----------|------------|-------------|-------------|
+| Groq Llama | $0.05 | $0.08 | Ultra-fast (< 100ms) |
+| Claude Haiku | $0.25 | $1.25 | Fast, lightweight |
+| GPT-3.5 Turbo | $1.50 | $2.00 | Cost-effective |
+| GPT-4o | $5.00 | $15.00 | Highest quality |
 
----
-
-## 🔧 Configuration Examples
-
-### Basic Chat
-```json
-{
-  "prompt": "What is artificial intelligence?",
-  "model_name": "claude-3-5-sonnet-20241022",
-  "fallback_strategy": "quality_optimized"
-}
-```
-
-### RAG-Enabled Query
-```json
-{
-  "prompt": "What are the key findings in the research papers?",
-  "fallback_strategy": "balanced",
-  "rag_enabled": true,
-  "s3_bucket": "research-papers",
-  "vector_store_type": "pinecone"
-}
-```
-
-### MCP Tool Usage
-```json
-{
-  "prompt": "Check the weather and read my calendar",
-  "fallback_strategy": "performance_optimized",
-  "mcp_enabled": true,
-  "mcp_servers": ["weather_api", "calendar_api"]
-}
-```
-
-### Structured Data Extraction
-```json
-{
-  "prompt": "Extract contact information from this text: ...",
-  "fallback_strategy": "quality_optimized",
-  "structured_output_enabled": true,
-  "structured_output_schema": {
-    "contacts": [
-      {
-        "name": "string",
-        "email": "string",
-        "phone": "string",
-        "company": "string"
-      }
-    ]
-  }
-}
-```
+**Average cost per request**: < $0.01 for most enterprise use cases
 
 ---
 
-## 🚦 Usage Examples
+## 🧪 Testing & Quality Assurance
 
-<details>
-<summary><b>🐍 Python Client</b></summary>
-
-```python
-import requests
-import json
-
-def call_omni_llm(prompt, fallback_strategy="balanced", **kwargs):
-    url = "https://your-api-gateway-url/invoke"
-    payload = {
-        "prompt": prompt,
-        "fallback_strategy": fallback_strategy,
-        "enable_fallback": True,
-        **kwargs
-    }
-    
-    response = requests.post(url, json=payload)
-    return response.json()
-
-# Basic usage
-result = call_omni_llm(
-    "Explain machine learning",
-    fallback_strategy="quality_optimized"
-)
-
-# Structured output
-result = call_omni_llm(
-    "Analyze this product review",
-    structured_output_enabled=True,
-    structured_output_schema={
-        "sentiment": "string",
-        "score": "number",
-        "key_points": ["array"]
-    }
-)
-```
-</details>
-
-<details>
-<summary><b>🌐 JavaScript/Node.js Client</b></summary>
-
-```javascript
-const axios = require('axios');
-
-async function callOmniLLM(prompt, options = {}) {
-  const url = 'https://your-api-gateway-url/invoke';
-  const payload = {
-    prompt,
-    fallback_strategy: 'balanced',
-    enable_fallback: true,
-    ...options
-  };
-  
-  try {
-    const response = await axios.post(url, payload);
-    return response.data;
-  } catch (error) {
-    console.error('Error:', error.response?.data || error.message);
-    throw error;
-  }
-}
-
-// Basic usage
-const result = await callOmniLLM(
-  "What is the capital of France?",
-  { fallback_strategy: "performance_optimized" }
-);
-
-// Structured output
-const analysis = await callOmniLLM(
-  "Analyze this financial data",
-  {
-    structured_output_enabled: true,
-    structured_output_schema: {
-      summary: "string",
-      recommendations: ["array"],
-      risk_level: "string"
-    }
-  }
-);
-```
-</details>
-
-<details>
-<summary><b>🔄 cURL Examples</b></summary>
-
+### Automated Testing
 ```bash
-# Basic text generation
-curl -X POST https://your-api-gateway-url/invoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Write a haiku about programming",
-    "fallback_strategy": "quality_optimized"
-  }'
+# Unit tests with coverage
+pytest tests/ -v --cov=src --cov-report=html
 
-# RAG query with custom settings
-curl -X POST https://your-api-gateway-url/invoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "What does the documentation say about security?",
-    "fallback_strategy": "balanced",
-    "rag_enabled": true,
-    "s3_bucket": "docs-bucket",
-    "vector_store_type": "pinecone"
-  }'
-
-# Structured output for data extraction
-curl -X POST https://your-api-gateway-url/invoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "Extract key metrics from this report: [report text]",
-    "fallback_strategy": "quality_optimized",
-    "structured_output_enabled": true,
-    "structured_output_schema": {
-      "revenue": "number",
-      "growth_rate": "number", 
-      "key_insights": ["array"],
-      "risks": ["array"]
-    }
-  }'
-```
-</details>
-
----
-
-## 🔍 Monitoring & Observability
-
-### CloudWatch Dashboards
-- Request volume and latency metrics
-- Error rates by provider and model
-- Cost tracking and optimization recommendations
-- Performance benchmarks across providers
-
-### X-Ray Tracing
-- End-to-end request tracing
-- Provider-specific performance analysis
-- RAG pipeline optimization insights
-- MCP tool execution monitoring
-
-### Custom Metrics
-```python
-# Built-in metrics
-- omni_llm.requests.total
-- omni_llm.requests.duration
-- omni_llm.errors.by_provider
-- omni_llm.costs.by_model
-- omni_llm.rag.retrieval_time
-- omni_llm.mcp.tool_calls
-```
-
----
-
-## 🧪 Testing
-
-### Unit Tests
-```bash
-# Run all tests
-pytest tests/ -v --cov=src
-
-# Run specific test categories
-pytest tests/test_providers/ -v
-pytest tests/test_rag/ -v
-pytest tests/test_mcp/ -v
-```
-
-### Integration Tests
-```bash
-# Test with real providers (requires API keys)
+# Integration tests with real providers
 pytest tests/integration/ -v --integration
+
+# Container tests
+pytest tests/container/ -v --docker
 
 # Load testing
 locust -f tests/load/locustfile.py --host=https://your-api-url
@@ -500,42 +407,73 @@ locust -f tests/load/locustfile.py --host=https://your-api-url
 
 ### Local Development
 ```bash
-# Start local server
+# Start development server
 python src/lambda_function.py
 
-# Run development tests
-python tests/test_local.py
+# Container development
+docker build -t omni-llm:dev .
+docker run -p 8000:8080 omni-llm:dev
+```
+
+---
+
+## 🚦 Deployment Pipeline
+
+### CI/CD Workflow
+```mermaid
+graph LR
+    A[Code Commit] --> B[Docker Build]
+    B --> C[ECR Push]
+    C --> D[Lambda Update]
+    D --> E[Integration Tests]
+    E --> F[Production Deploy]
+    
+    B --> G[Security Scan]
+    G --> H[Vulnerability Check]
+    H --> C
+```
+
+### Deployment Commands
+```bash
+# Staging deployment
+git checkout staging
+./deployment/scripts/deploy.sh staging
+
+# Production deployment  
+git checkout master
+./deployment/scripts/deploy.sh prod
+
+# Health check
+curl https://your-api-url/health
 ```
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions from the community! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome enterprise and community contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ### Development Setup
 ```bash
-# Fork and clone the repository
+# Fork and clone
 git clone https://github.com/your-username/omni-llm.git
 cd omni-llm
 
-# Install development dependencies
+# Install dependencies
 pip install -r requirements-dev.txt
-
-# Install pre-commit hooks
 pre-commit install
 
 # Run tests
 pytest tests/ -v
 ```
 
-### Areas for Contribution
-- 🆕 **New Provider Integrations**: Add support for emerging LLM providers
-- 🔧 **Feature Enhancements**: Improve existing functionality
-- 📚 **Documentation**: Help improve guides and examples
-- 🐛 **Bug Fixes**: Report and fix issues
-- ⚡ **Performance**: Optimize speed and cost efficiency
-- 🔒 **Security**: Enhance security measures
+### Contribution Areas
+- 🆕 **Provider Integrations**: New AI model providers
+- 🏗️ **Infrastructure**: AWS optimization and new services
+- 🔧 **Features**: Enhanced capabilities and tools
+- 📚 **Documentation**: Guides and examples
+- 🔒 **Security**: Enterprise security enhancements
+- ⚡ **Performance**: Speed and cost optimizations
 
 ---
 
@@ -547,55 +485,51 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👥 Authors & Acknowledgments
 
-### 🧑‍💻 Primary Author
-**Temkit Sid-Ali** - *Creator & Lead Developer*  
+### 🧑‍💻 Enterprise Development Team
+**Temkit Sid-Ali** - *Chief Technology Officer & Lead Architect*  
 📧 Email: [contact@yet.lu](mailto:contact@yet.lu)  
 🏢 Organization: [yet.lu](https://yet.lu)  
 🔗 GitHub: [@temkit](https://github.com/temkit)
 
-### 🤖 AI Co-Authors
-This project was developed with significant assistance from state-of-the-art AI systems:
+### 🤖 AI Engineering Co-Authors
+Advanced AI systems contributed significantly to this enterprise solution:
 
-- **🤖 Claude Code 4** - *Architecture design, code generation, and documentation*
-- **🧠 OpenAI o3** - *Advanced reasoning and problem-solving capabilities*  
-- **💻 GitHub Copilot** - *Code completion and development acceleration*
-- **🔍 Perplexity Llama** - *Research assistance and knowledge synthesis*
+- **🤖 Claude Code 4** - *Enterprise architecture design and implementation*
+- **🧠 OpenAI o3** - *Advanced reasoning and system optimization*
+- **💻 GitHub Copilot** - *Development acceleration and code generation*
+- **🔍 Perplexity Llama** - *Research synthesis and best practices*
 
-### 🙏 Special Thanks
-- **LangChain Team** for the incredible framework that powers our integrations
-- **AWS** for the robust serverless infrastructure
-- **Open Source Community** for the foundational tools and libraries
-- **AI Research Community** for advancing the field of Large Language Models
-
-### 🌟 Inspiration
-This project embodies the vision of democratizing AI access through universal interfaces, making it possible for developers to harness the power of multiple AI providers through a single, elegant API.
+### 🙏 Enterprise Acknowledgments
+- **AWS Solutions Architecture Team** for serverless best practices
+- **LangChain Enterprise** for the robust AI framework
+- **Container Security Community** for security guidelines
+- **Enterprise AI Research Labs** for advancing the field
 
 ---
 
-## 🔗 Links
+## 🔗 Enterprise Resources
 
-- **🏠 Homepage**: [https://yet.lu](https://yet.lu)
-- **📖 Documentation**: [View Docs](docs/)
-- **🐛 Issue Tracker**: [GitHub Issues](https://github.com/yet-market/omni-llm/issues)
-- **💬 Discussions**: [GitHub Discussions](https://github.com/yet-market/omni-llm/discussions)
-- **📰 Changelog**: [CHANGELOG.md](CHANGELOG.md)
+- **🏠 Enterprise Portal**: [https://yet.lu](https://yet.lu)
+- **📖 Technical Documentation**: [docs/](docs/)
+- **🎯 Enterprise Support**: [support@yet.lu](mailto:support@yet.lu)
+- **🐛 Issue Tracking**: [GitHub Issues](https://github.com/yet-market/omni-llm/issues)
+- **💼 Enterprise Discussions**: [GitHub Discussions](https://github.com/yet-market/omni-llm/discussions)
 
 ---
 
-## 📊 Project Status
+## 📊 Enterprise Metrics
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/yet-market/omni-llm/CI?style=flat-square)
-![GitHub issues](https://img.shields.io/github/issues/yet-market/omni-llm?style=flat-square)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/yet-market/omni-llm?style=flat-square)
-![GitHub last commit](https://img.shields.io/github/last-commit/yet-market/omni-llm?style=flat-square)
-![GitHub stars](https://img.shields.io/github/stars/yet-market/omni-llm?style=social)
+![AWS Infrastructure](https://img.shields.io/badge/AWS-Infrastructure-orange?style=flat-square)
+![ECR Registry](https://img.shields.io/badge/ECR-Container--Registry-blue?style=flat-square)
+![Lambda ARM64](https://img.shields.io/badge/Lambda-ARM64--Optimized-green?style=flat-square)
+![Enterprise Ready](https://img.shields.io/badge/Enterprise-Ready-gold?style=flat-square)
 
 ---
 
 <div align="center">
 
-**⭐ Star this repository if you find it useful!**
+**⭐ Star this repository if you find it valuable for enterprise AI deployments!**
 
-**🚀 Built with passion for the AI community by [yet.lu](https://yet.lu)**
+**🚀 Built for enterprise-scale AI infrastructure by [yet.lu](https://yet.lu)**
 
 </div>

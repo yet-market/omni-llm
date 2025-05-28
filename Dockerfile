@@ -1,4 +1,4 @@
-# Omni-LLM Universal AI Lambda Gateway
+# Enterprise-Grade Multi-Provider AI Gateway - ARM64 Container Runtime
 FROM public.ecr.aws/lambda/python:3.11-arm64
 
 # Set working directory

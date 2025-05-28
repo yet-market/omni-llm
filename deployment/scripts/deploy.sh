@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# Omni-LLM Deployment Script
-# ==========================
-# Deploys the Lambda function and infrastructure to AWS
+# Enterprise AI Gateway ECR Deployment Script
+# ============================================
+# Deploys containerized Lambda function and AWS infrastructure
+# Features: ECR private registry, ARM64 optimization, vulnerability scanning
 # Uses the 'yet' profile and eu-west-2 region
 
 set -e
@@ -98,26 +99,27 @@ cd "$PROJECT_ROOT"
 BUILD_DIR="$PROJECT_ROOT/deployment/build"
 mkdir -p "$BUILD_DIR"
 
-print_status "Building Docker image..."
+print_status "Building and pushing Docker image to ECR..."
+
+# Get AWS account ID
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --profile "$AWS_PROFILE" --query Account --output text)
+
+# ECR repository URI
+ECR_REPO_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/omni-llm-gateway-${ENVIRONMENT}"
+
+# Login to ECR
+print_status "Logging into ECR..."
+aws ecr get-login-password --region "$AWS_REGION" --profile "$AWS_PROFILE" | docker login --username AWS --password-stdin "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
 # Build Docker image
+print_status "Building Docker image..."
 docker build -t omni-llm:latest .
 
-print_status "Creating Lambda deployment package..."
+# Tag image for ECR
+docker tag omni-llm:latest "${ECR_REPO_URI}:latest"
+docker tag omni-llm:latest "${ECR_REPO_URI}:$(date +%Y%m%d-%H%M%S)"
 
-# Create a container to extract the deployment package
-docker run --rm --entrypoint="" \
-    -v "$BUILD_DIR:/output" \
-    omni-llm:latest \
-    sh -c "yum install -y zip && cd /var/task && zip -r /output/lambda-deployment.zip . -x '*.pyc' '*/__pycache__/*'"
-
-# Check if deployment package was created
-if [ ! -f "$BUILD_DIR/lambda-deployment.zip" ]; then
-    print_error "Failed to create deployment package"
-    exit 1
-fi
-
-print_success "Deployment package created: $(du -h $BUILD_DIR/lambda-deployment.zip | cut -f1)"
+print_success "Docker image built and tagged for ECR"
 
 # Load environment-specific configuration
 ENV_CONFIG_FILE="$PROJECT_ROOT/deployment/config/${ENVIRONMENT}.env"
@@ -178,31 +180,43 @@ else
     exit 1
 fi
 
+# Push Docker image to ECR
+print_status "Pushing Docker image to ECR..."
+docker push "${ECR_REPO_URI}:latest"
+docker push "${ECR_REPO_URI}:$(date +%Y%m%d-%H%M%S)"
+
+if [ $? -eq 0 ]; then
+    print_success "Docker image pushed to ECR successfully"
+else
+    print_error "Failed to push Docker image to ECR"
+    exit 1
+fi
+
 # Get Lambda function name from stack outputs
 LAMBDA_FUNCTION_NAME=$(aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --region "$AWS_REGION" \
     --profile "$AWS_PROFILE" \
-    --query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionArn'].OutputValue" \
-    --output text | cut -d':' -f7)
+    --query "Stacks[0].Outputs[?OutputKey=='LambdaFunctionName'].OutputValue" \
+    --output text)
 
 if [ -z "$LAMBDA_FUNCTION_NAME" ]; then
     print_error "Could not retrieve Lambda function name from stack outputs"
     exit 1
 fi
 
-print_status "Updating Lambda function code..."
+print_status "Updating Lambda function code with ECR image..."
 
-# Update Lambda function code
+# Update Lambda function code with ECR image
 aws lambda update-function-code \
     --function-name "$LAMBDA_FUNCTION_NAME" \
-    --zip-file "fileb://$BUILD_DIR/lambda-deployment.zip" \
+    --image-uri "${ECR_REPO_URI}:latest" \
     --region "$AWS_REGION" \
     --profile "$AWS_PROFILE" \
     > /dev/null
 
 if [ $? -eq 0 ]; then
-    print_success "Lambda function code updated successfully"
+    print_success "Lambda function code updated with ECR image successfully"
 else
     print_error "Failed to update Lambda function code"
     exit 1
@@ -221,10 +235,6 @@ print_status "Updating Lambda environment variables..."
 # Build environment variables JSON
 ENV_VARS='{"Variables":{'
 ENV_VARS+='"ENVIRONMENT":"'$ENVIRONMENT'",'
-ENV_VARS+='"AWS_REGION":"'$AWS_REGION'",'
-ENV_VARS+='"S3_BUCKET_NAME":"'$S3_BUCKET'",'
-ENV_VARS+='"API_KEYS_SECRET_NAME":"omni-llm/api-keys-'$ENVIRONMENT'",'
-ENV_VARS+='"LLM_PROVIDERS_SECRET_NAME":"omni-llm/providers-'$ENVIRONMENT'",'
 ENV_VARS+='"LOG_LEVEL":"'${LOG_LEVEL:-INFO}'",'
 ENV_VARS+='"ENABLE_XRAY_TRACING":"'${ENABLE_XRAY_TRACING:-true}'",'
 ENV_VARS+='"ENABLE_METRICS":"'${ENABLE_METRICS:-true}'",'
@@ -314,8 +324,13 @@ else
     print_warning "Deployment test may have failed. Response: $TEST_RESPONSE"
 fi
 
-# Clean up build directory
-rm -rf "$BUILD_DIR"
+# Get ECR repository URI from stack outputs
+ECR_REPOSITORY_URI=$(aws cloudformation describe-stacks \
+    --stack-name "$STACK_NAME" \
+    --region "$AWS_REGION" \
+    --profile "$AWS_PROFILE" \
+    --query "Stacks[0].Outputs[?OutputKey=='ECRRepositoryURI'].OutputValue" \
+    --output text)
 
 # Print deployment summary
 echo
@@ -327,8 +342,9 @@ echo "Stack Name:       $STACK_NAME"
 echo "Region:           $AWS_REGION"
 echo "API Endpoint:     $API_ENDPOINT"
 echo "API Key:          $API_KEY_VALUE"
+echo "ECR Repository:   $ECR_REPOSITORY_URI"
 echo "S3 Access:        Read-only access to user-provided S3 paths"
-echo "Lambda Function:  $LAMBDA_FUNCTION_NAME"
+echo "Lambda Function:  $LAMBDA_FUNCTION_NAME (Container)"
 echo
 echo "Test your deployment:"
 echo "curl -X POST \\"

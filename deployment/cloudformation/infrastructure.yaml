@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Omni-LLM Universal AI Lambda Gateway Infrastructure'
+Description: 'Enterprise-Grade Multi-Provider AI Gateway with Distributed Computing Architecture and Intelligent Load Balancing on AWS Serverless Infrastructure'
 
 Parameters:
   Environment:
@@ -65,6 +65,15 @@ Resources:
                     's3:prefix': 
                       - 'vectors/*'
                       - 'documents/*'
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: !GetAtt ECRRepository.Arn
 
   # CloudWatch Log Group
   LambdaLogGroup:
@@ -73,7 +82,33 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/omni-llm-gateway-${Environment}'
       RetentionInDays: 30
 
-  # Lambda Function
+  # ECR Repository for Lambda Container Images
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'omni-llm-gateway-${Environment}'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+  # Lambda Function using ECR Image
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -88,9 +123,9 @@ Resources:
                       'Content-Type': 'application/json',
                       'Access-Control-Allow-Origin': '*'
                   },
-                  'body': '{"message": "Omni-LLM Gateway - will be updated by deployment script"}'
+                  'body': '{"message": "Omni-LLM Gateway - ECR image will be deployed by script"}'
               }
-      Handler: src.lambda_function.lambda_handler
+      Handler: index.lambda_handler
       Runtime: python3.11
       MemorySize: !Ref LambdaMemorySize
       Timeout: !Ref LambdaTimeout
@@ -223,8 +258,6 @@ Resources:
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
-          LoggingLevel: INFO
-          DataTraceEnabled: !If [IsProd, false, true]
           MetricsEnabled: true
           ThrottlingRateLimit: !Ref APIThrottleRate
           ThrottlingBurstLimit: !Ref APIThrottleBurst
@@ -291,3 +324,15 @@ Outputs:
     Value: !Ref LambdaFunction
     Export:
       Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+
+  ECRRepositoryURI:
+    Description: 'ECR Repository URI'
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryURI'
+
+  ECRRepositoryName:
+    Description: 'ECR Repository Name'
+    Value: !Ref ECRRepository
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryName'
