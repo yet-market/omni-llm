@@ -158,7 +158,7 @@ print_status "Deploying CloudFormation stack..."
 
 # Deploy CloudFormation stack
 aws cloudformation deploy \
-    --template-file deployment/cloudformation/minimal-infrastructure.yaml \
+    --template-file deployment/cloudformation/infrastructure.yaml \
     --stack-name "$STACK_NAME" \
     --parameter-overrides \
         Environment="$ENVIRONMENT" \

@@ -6,37 +6,27 @@ Parameters:
     Type: String
     Default: 'staging'
     AllowedValues: ['staging', 'prod']
-    Description: 'Environment name (staging for development, prod for production)'
+    Description: 'Environment name'
   
   LambdaMemorySize:
     Type: Number
     Default: 1024
-    MinValue: 512
-    MaxValue: 10240
-    Description: 'Lambda function memory size in MB (staging: 1024, prod: 2048)'
+    Description: 'Lambda function memory size in MB'
   
   LambdaTimeout:
     Type: Number
     Default: 900
-    MinValue: 60
-    MaxValue: 900
     Description: 'Lambda function timeout in seconds'
   
   APIThrottleRate:
     Type: Number
     Default: 100
-    Description: 'API Gateway throttle rate per second (staging: 100, prod: 1000)'
+    Description: 'API Gateway throttle rate per second'
   
   APIThrottleBurst:
     Type: Number
     Default: 200
-    Description: 'API Gateway throttle burst limit (staging: 200, prod: 2000)'
-  
-  OpenAIAPIKey:
-    Type: String
-    NoEcho: true
-    Description: 'OpenAI API Key (will be stored in Secrets Manager)'
-    Default: ''
+    Description: 'API Gateway throttle burst limit'
   
   APIKeyValue:
     Type: String
@@ -45,55 +35,7 @@ Parameters:
     Default: ''
 
 Resources:
-  # S3 Bucket for RAG documents
-  DocumentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'omni-llm-documents-${Environment}-${AWS::AccountId}'
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            Function: !GetAtt LambdaFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: prefix
-                    Value: 'documents/'
-
-  # Secrets Manager for API Keys
-  APIKeysSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub 'omni-llm/api-keys-${Environment}'
-      Description: 'API Keys for Omni-LLM Gateway'
-      SecretString: !Sub |
-        {
-          "api_keys": ["${APIKeyValue}"]
-        }
-
-  # Secrets Manager for LLM Provider Keys
-  LLMProvidersSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub 'omni-llm/providers-${Environment}'
-      Description: 'LLM Provider API Keys'
-      SecretString: !Sub |
-        {
-          "openai-api-key": "${OpenAIAPIKey}"
-        }
-
-  # IAM Role for Lambda
+  # IAM Role for Lambda (minimal permissions)
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -109,99 +51,20 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
       Policies:
-        - PolicyName: SecretsManagerAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource:
-                  - !Ref APIKeysSecret
-                  - !Ref LLMProvidersSecret
-        - PolicyName: S3Access
+        - PolicyName: S3ReadAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
                   - s3:ListBucket
-                Resource:
-                  - !GetAtt DocumentBucket.Arn
-                  - !Sub '${DocumentBucket.Arn}/*'
-        - PolicyName: CloudWatchLogs
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
-        - PolicyName: CloudWatchMetrics
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
                 Resource: '*'
-        - PolicyName: BedrockAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - bedrock:InvokeModel
-                  - bedrock:InvokeModelWithResponseStream
-                Resource: '*'
-
-  # Lambda Function
-  LambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub 'omni-llm-gateway-${Environment}'
-      Description: 'Universal AI Lambda Gateway'
-      Runtime: python3.11
-      Architecture: arm64
-      Handler: src.lambda_function.lambda_handler
-      Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-              return {
-                  'statusCode': 200,
-                  'body': '{"message": "Placeholder - will be updated during deployment"}'
-              }
-      MemorySize: !Ref LambdaMemorySize
-      Timeout: !Ref LambdaTimeout
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Environment:
-        Variables:
-          ENVIRONMENT: !Ref Environment
-          AWS_REGION: !Ref AWS::Region
-          S3_BUCKET_NAME: !Ref DocumentBucket
-          API_KEYS_SECRET_NAME: !Ref APIKeysSecret
-          LLM_PROVIDERS_SECRET_NAME: !Ref LLMProvidersSecret
-          LOG_LEVEL: 'INFO'
-          ENABLE_XRAY_TRACING: 'true'
-          ENABLE_METRICS: 'true'
-          METRICS_NAMESPACE: 'OmniLLM'
-      TracingConfig:
-        Mode: Active
-      ReservedConcurrencyLimit: 100
-
-  # Lambda Permission for S3
-  LambdaInvokePermissionS3:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref LambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn: !GetAtt DocumentBucket.Arn
+                Condition:
+                  StringLike:
+                    's3:prefix': 
+                      - 'vectors/*'
+                      - 'documents/*'
 
   # CloudWatch Log Group
   LambdaLogGroup:
@@ -209,6 +72,39 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/omni-llm-gateway-${Environment}'
       RetentionInDays: 30
+
+  # Lambda Function
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'omni-llm-gateway-${Environment}'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                  },
+                  'body': '{"message": "Omni-LLM Gateway - will be updated by deployment script"}'
+              }
+      Handler: src.lambda_function.lambda_handler
+      Runtime: python3.11
+      MemorySize: !Ref LambdaMemorySize
+      Timeout: !Ref LambdaTimeout
+      Architectures:
+        - arm64
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: !If [IsProd, 'INFO', 'DEBUG']
+          ENABLE_XRAY_TRACING: 'true'
+          ENABLE_METRICS: 'true'
+          METRICS_NAMESPACE: !Sub 'OmniLLM-${Environment}'
+      TracingConfig:
+        Mode: Active
 
   # API Gateway REST API
   RestAPI:
@@ -219,49 +115,8 @@ Resources:
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Policy:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: execute-api:Invoke
-            Resource: '*'
 
-  # API Gateway API Key
-  APIKey:
-    Type: AWS::ApiGateway::ApiKey
-    Properties:
-      Name: !Sub 'omni-llm-api-key-${Environment}'
-      Description: 'API Key for Omni-LLM Gateway'
-      Enabled: true
-      Value: !Ref APIKeyValue
-
-  # API Gateway Usage Plan
-  UsagePlan:
-    Type: AWS::ApiGateway::UsagePlan
-    DependsOn: APIStage
-    Properties:
-      UsagePlanName: !Sub 'omni-llm-usage-plan-${Environment}'
-      Description: 'Usage plan for Omni-LLM API'
-      Throttle:
-        RateLimit: !Ref APIThrottleRate
-        BurstLimit: !Ref APIThrottleBurst
-      Quota:
-        Limit: 10000
-        Period: DAY
-      ApiStages:
-        - ApiId: !Ref RestAPI
-          Stage: !Ref Environment
-
-  # API Gateway Usage Plan Key
-  UsagePlanKey:
-    Type: AWS::ApiGateway::UsagePlanKey
-    Properties:
-      KeyId: !Ref APIKey
-      KeyType: API_KEY
-      UsagePlanId: !Ref UsagePlan
-
-  # API Gateway Resource
+  # API Gateway Resource - /invoke
   InvokeResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -269,7 +124,7 @@ Resources:
       ParentId: !GetAtt RestAPI.RootResourceId
       PathPart: 'invoke'
 
-  # API Gateway Method (POST)
+  # API Gateway Method - POST /invoke
   InvokeMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -284,21 +139,13 @@ Resources:
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
       MethodResponses:
         - StatusCode: '200'
-          ResponseModels:
-            application/json: Empty
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
         - StatusCode: '400'
-          ResponseModels:
-            application/json: Empty
         - StatusCode: '401'
-          ResponseModels:
-            application/json: Empty
         - StatusCode: '500'
-          ResponseModels:
-            application/json: Empty
 
-  # API Gateway Method (OPTIONS for CORS)
+  # API Gateway Method - OPTIONS /invoke (CORS)
   InvokeOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -323,7 +170,7 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
-  # Health Check Resource
+  # API Gateway Resource - /health
   HealthResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -331,7 +178,7 @@ Resources:
       ParentId: !GetAtt RestAPI.RootResourceId
       PathPart: 'health'
 
-  # Health Check Method
+  # API Gateway Method - GET /health
   HealthMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -377,58 +224,48 @@ Resources:
         - ResourcePath: '/*'
           HttpMethod: '*'
           LoggingLevel: INFO
-          DataTraceEnabled: true
+          DataTraceEnabled: !If [IsProd, false, true]
           MetricsEnabled: true
           ThrottlingRateLimit: !Ref APIThrottleRate
           ThrottlingBurstLimit: !Ref APIThrottleBurst
 
-  # CloudWatch Dashboard
-  Dashboard:
-    Type: AWS::CloudWatch::Dashboard
+  # API Gateway API Key
+  APIKey:
+    Type: AWS::ApiGateway::ApiKey
     Properties:
-      DashboardName: !Sub 'omni-llm-${Environment}'
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 0,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "metrics": [
-                  [ "AWS/Lambda", "Invocations", "FunctionName", "${LambdaFunction}" ],
-                  [ ".", "Errors", ".", "." ],
-                  [ ".", "Duration", ".", "." ]
-                ],
-                "period": 300,
-                "stat": "Sum",
-                "region": "${AWS::Region}",
-                "title": "Lambda Metrics"
-              }
-            },
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 6,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "metrics": [
-                  [ "AWS/ApiGateway", "Count", "ApiName", "${RestAPI}" ],
-                  [ ".", "4XXError", ".", "." ],
-                  [ ".", "5XXError", ".", "." ],
-                  [ ".", "Latency", ".", "." ]
-                ],
-                "period": 300,
-                "stat": "Sum",
-                "region": "${AWS::Region}",
-                "title": "API Gateway Metrics"
-              }
-            }
-          ]
-        }
+      Name: !Sub 'omni-llm-api-key-${Environment}'
+      Description: !Sub 'API Key for Omni-LLM Gateway ${Environment}'
+      Enabled: true
+      Value: !Ref APIKeyValue
+
+  # API Gateway Usage Plan
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: APIStage
+    Properties:
+      UsagePlanName: !Sub 'omni-llm-usage-plan-${Environment}'
+      Description: !Sub 'Usage plan for Omni-LLM API ${Environment}'
+      Throttle:
+        RateLimit: !Ref APIThrottleRate
+        BurstLimit: !Ref APIThrottleBurst
+      Quota:
+        Limit: !If [IsProd, 100000, 10000]
+        Period: DAY
+      ApiStages:
+        - ApiId: !Ref RestAPI
+          Stage: !Ref Environment
+
+  # API Gateway Usage Plan Key
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref APIKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+# Conditions for environment-specific settings
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
 
 Outputs:
   APIEndpoint:
@@ -449,12 +286,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LambdaArn'
 
-  S3BucketName:
-    Description: 'S3 bucket for documents'
-    Value: !Ref DocumentBucket
+  LambdaFunctionName:
+    Description: 'Lambda function name'
+    Value: !Ref LambdaFunction
     Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket'
-
-  DashboardURL:
-    Description: 'CloudWatch Dashboard URL'
-    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${Dashboard}'
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
