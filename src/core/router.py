@@ -1,17 +1,18 @@
 """
-Omni-LLM Request Router
-======================
+Omni-LLM Request Router - LangChain Based
+==========================================
 
-Central router for processing requests and coordinating between providers.
+Central router for processing requests using the universal LangChain provider
+with automatic fallback support.
 """
 
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 
 from .exceptions import ProviderError, ConfigurationError
-from ..models.architecture import RequestSchema, ResponseSchema, LLMProvider
-from ..providers.openai_provider import OpenAIProvider
+from ..models.architecture import RequestSchema
+from ..providers.langchain_provider import LangChainProvider
 from ..utils.config import Config
 
 logger = logging.getLogger(__name__)
@@ -19,9 +20,10 @@ logger = logging.getLogger(__name__)
 
 class RequestRouter:
     """
-    Central router for processing LLM requests.
+    Central router for processing LLM requests using LangChain provider.
     
-    Routes requests to appropriate providers and handles response coordination.
+    Routes all requests through the universal LangChain provider which handles
+    multiple providers internally with automatic fallback.
     """
     
     def __init__(self, config: Config):
@@ -32,29 +34,22 @@ class RequestRouter:
             config: Configuration object
         """
         self.config = config
-        self._providers = {}
-        self._initialize_providers()
+        self.provider = None
+        self._initialize_provider()
     
-    def _initialize_providers(self) -> None:
-        """Initialize available LLM providers."""
+    def _initialize_provider(self) -> None:
+        """Initialize the LangChain universal provider."""
         try:
-            # Initialize OpenAI provider
-            if self.config.openai_api_key:
-                self._providers[LLMProvider.OPENAI] = OpenAIProvider(self.config)
-                logger.info("OpenAI provider initialized")
-            
-            # TODO: Initialize other providers as they are implemented
-            # self._providers[LLMProvider.ANTHROPIC] = AnthropicProvider(self.config)
-            # self._providers[LLMProvider.AWS_BEDROCK] = BedrockProvider(self.config)
-            # etc.
+            self.provider = LangChainProvider(self.config)
+            logger.info("LangChain universal provider initialized successfully")
             
         except Exception as e:
-            logger.error(f"Error initializing providers: {e}")
+            logger.error(f"Error initializing LangChain provider: {e}")
             raise ConfigurationError(f"Provider initialization failed: {e}")
     
     def process_request(self, request: RequestSchema, request_id: str) -> Dict[str, Any]:
         """
-        Process an incoming request and route to appropriate provider.
+        Process an incoming request through the LangChain provider.
         
         Args:
             request: Validated request schema
@@ -64,36 +59,48 @@ class RequestRouter:
             Response dictionary
         
         Raises:
-            ProviderError: If provider processing fails
+            ProviderError: If request processing fails
         """
         start_time = datetime.utcnow()
         
-        logger.info(f"Processing request {request_id} with provider {request.model_provider}")
+        logger.info(f"Processing request {request_id} through LangChain provider")
         
         try:
-            # Get provider
-            provider = self._get_provider(request.model_provider)
+            # Process request through LangChain provider
+            response_data = self.provider.process_request(request, request_id)
             
-            # Process request through provider
-            response_data = provider.process_request(request, request_id)
-            
-            # Calculate execution time
-            execution_time = (datetime.utcnow() - start_time).total_seconds()
-            
-            # Build response
+            # Build final response
             response = {
                 "success": True,
                 "response": {
                     "content": response_data.get("content", ""),
                     "role": "assistant",
-                    "finish_reason": response_data.get("finish_reason", "stop")
+                    "finish_reason": "stop"
                 },
                 "metadata": {
-                    "model_used": request.model_name,
-                    "provider": request.model_provider.value,
-                    "usage": response_data.get("usage", {}),
-                    "execution_time": execution_time,
-                    "request_id": request_id
+                    "model_used": response_data.get("model_used", "unknown"),
+                    "provider": response_data.get("provider_used", "unknown").value if hasattr(response_data.get("provider_used"), 'value') else str(response_data.get("provider_used", "unknown")),
+                    "usage": {
+                        "prompt_tokens": response_data.get("prompt_tokens", 0),
+                        "completion_tokens": response_data.get("completion_tokens", 0),
+                        "total_tokens": response_data.get("total_tokens", 0),
+                        "cost_usd": response_data.get("total_cost", 0.0)
+                    },
+                    "execution_time": response_data.get("total_latency", 0.0),
+                    "provider_latency": response_data.get("provider_latency", 0.0),
+                    "request_id": request_id,
+                    "fallback_attempts": len(response_data.get("fallback_attempts", [])),
+                    "providers_tried": [
+                        {
+                            "provider": attempt.provider.value if hasattr(attempt.provider, 'value') else str(attempt.provider),
+                            "model": attempt.model,
+                            "success": attempt.success,
+                            "latency": attempt.latency,
+                            "cost": attempt.cost,
+                            "error": attempt.error
+                        }
+                        for attempt in response_data.get("fallback_attempts", [])
+                    ]
                 },
                 "error": None
             }
@@ -110,7 +117,14 @@ class RequestRouter:
             if "tool_calls" in response_data:
                 response["tool_calls"] = response_data["tool_calls"]
             
+            execution_time = (datetime.utcnow() - start_time).total_seconds()
+            response["metadata"]["total_execution_time"] = execution_time
+            
             logger.info(f"Request {request_id} processed successfully in {execution_time:.2f}s")
+            logger.info(f"Used provider: {response_data.get('provider_used')}, model: {response_data.get('model_used')}")
+            
+            if response_data.get("fallback_attempts"):
+                logger.info(f"Fallback attempts: {len(response_data['fallback_attempts'])}")
             
             return response
             
@@ -120,60 +134,41 @@ class RequestRouter:
             logger.error(f"Unexpected error processing request {request_id}: {e}")
             raise ProviderError(
                 f"Request processing failed: {str(e)}",
-                provider=request.model_provider.value,
-                model=request.model_name
+                provider="langchain",
+                details={"request_id": request_id}
             )
-    
-    def _get_provider(self, provider_type: LLMProvider):
-        """
-        Get provider instance for the specified type.
-        
-        Args:
-            provider_type: The provider type
-        
-        Returns:
-            Provider instance
-        
-        Raises:
-            ProviderError: If provider is not available
-        """
-        if provider_type not in self._providers:
-            available_providers = list(self._providers.keys())
-            raise ProviderError(
-                f"Provider '{provider_type.value}' is not available. "
-                f"Available providers: {[p.value for p in available_providers]}",
-                provider=provider_type.value
-            )
-        
-        return self._providers[provider_type]
     
     def health_check(self) -> Dict[str, Any]:
         """
-        Perform health check on all providers.
+        Perform health check on the LangChain provider.
         
         Returns:
             Health check results
         """
-        results = {
-            "healthy": True,
-            "providers": {},
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-        for provider_type, provider in self._providers.items():
-            try:
-                provider_health = provider.health_check()
-                results["providers"][provider_type.value] = provider_health
-                
-                if not provider_health.get("healthy", False):
-                    results["healthy"] = False
-                    
-            except Exception as e:
-                logger.error(f"Health check failed for {provider_type.value}: {e}")
-                results["providers"][provider_type.value] = {
+        try:
+            if not self.provider:
+                return {
                     "healthy": False,
-                    "error": str(e)
+                    "error": "LangChain provider not initialized",
+                    "timestamp": datetime.utcnow().isoformat()
                 }
-                results["healthy"] = False
-        
-        return results
+            
+            provider_health = self.provider.health_check()
+            
+            # Enhance with router-level information
+            result = {
+                "healthy": provider_health.get("healthy", False),
+                "router": "langchain_universal",
+                "provider_details": provider_health,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return {
+                "healthy": False,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }

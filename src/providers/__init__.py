@@ -2,11 +2,11 @@
 Omni-LLM Providers
 ==================
 
-LLM provider implementations for different AI services.
+LangChain-based universal provider with built-in fallback support.
 """
 
-from .openai_provider import OpenAIProvider
+from .langchain_provider import LangChainProvider
 
 __all__ = [
-    "OpenAIProvider"
+    "LangChainProvider"
 ]
