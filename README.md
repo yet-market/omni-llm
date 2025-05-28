@@ -9,7 +9,7 @@
 [![AWS Lambda](https://img.shields.io/badge/AWS-Lambda-orange.svg?style=flat-square)](https://aws.amazon.com/lambda/)
 [![LangChain](https://img.shields.io/badge/🦜️-LangChain-green.svg?style=flat-square)](https://langchain.com/)
 
-**A serverless AWS Lambda function that provides a unified gateway for all LLM interactions, supporting multiple AI providers, RAG capabilities, and dynamic tool integration through a single API endpoint.**
+**A serverless AWS Lambda function with LangChain native fallback that provides universal AI access through a single API endpoint, supporting automatic provider switching, RAG capabilities, and MCP tool integration.**
 
 [🚀 Quick Start](#-quick-start) • [📖 Documentation](#-documentation) • [🏗️ Architecture](#️-architecture) • [🤝 Contributing](#-contributing)
 
@@ -96,8 +96,8 @@ curl -X POST http://localhost:8000/invoke \
   -H "x-api-key: dev-key-12345" \
   -d '{
     "prompt": "Explain quantum computing in simple terms",
-    "model_provider": "openai",
-    "model_name": "gpt-3.5-turbo"
+    "model_name": "gpt-4o-mini",
+    "enable_fallback": true
   }'
 ```
 
@@ -107,17 +107,14 @@ curl -X POST http://localhost:8000/invoke \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Analyze the iPhone 15",
-    "model_provider": "openai",
-    "model_name": "gpt-4",
-    "structured_output": {
-      "enabled": true,
-      "format": {
-        "product_name": "string",
-        "price": "number",
-        "pros": ["array"],
-        "cons": ["array"],
-        "rating": "number"
-      }
+    "fallback_strategy": "quality_optimized",
+    "structured_output_enabled": true,
+    "structured_output_schema": {
+      "product_name": "string",
+      "price": "number",
+      "pros": ["array"],
+      "cons": ["array"],
+      "rating": "number"
     }
   }'
 ```
@@ -177,11 +174,12 @@ graph TB
 
 ### Key Components
 
-- **🎯 Universal Router**: Intelligent routing to optimal providers
+- **🦜 LangChain Universal Provider**: Single provider with native fallback chains
+- **🔄 Automatic Fallback**: Built-in `with_fallbacks()` for seamless provider switching
 - **🔍 RAG Engine**: Advanced document retrieval and processing
 - **🛠️ MCP Integration**: Dynamic tool discovery and execution
 - **📊 Structured Parser**: Guaranteed JSON format compliance
-- **⚡ Performance Optimizer**: Caching, connection pooling, ARM64
+- **⚡ Performance Optimizer**: Pre-configured fallback strategies, ARM64
 - **🔐 Security Layer**: Authentication, rate limiting, encryption
 
 ---
@@ -211,8 +209,8 @@ graph TB
 ```json
 {
   "prompt": "What is artificial intelligence?",
-  "model_provider": "anthropic",
-  "model_name": "claude-3-5-sonnet"
+  "model_name": "claude-3-5-sonnet-20241022",
+  "fallback_strategy": "quality_optimized"
 }
 ```
 
@@ -220,13 +218,10 @@ graph TB
 ```json
 {
   "prompt": "What are the key findings in the research papers?",
-  "model_provider": "openai",
-  "model_name": "gpt-4",
-  "rag_config": {
-    "enabled": true,
-    "s3_bucket": "research-papers",
-    "vector_store": {"type": "pinecone", "index": "research-index"}
-  }
+  "fallback_strategy": "balanced",
+  "rag_enabled": true,
+  "s3_bucket": "research-papers",
+  "vector_store_type": "pinecone"
 }
 ```
 
@@ -234,12 +229,9 @@ graph TB
 ```json
 {
   "prompt": "Check the weather and read my calendar",
-  "model_provider": "anthropic",
-  "model_name": "claude-3-5-sonnet",
-  "mcp_config": {
-    "enabled": true,
-    "servers": ["weather_api", "calendar_api"]
-  }
+  "fallback_strategy": "performance_optimized",
+  "mcp_enabled": true,
+  "mcp_servers": ["weather_api", "calendar_api"]
 }
 ```
 
@@ -247,20 +239,17 @@ graph TB
 ```json
 {
   "prompt": "Extract contact information from this text: ...",
-  "model_provider": "openai",
-  "model_name": "gpt-4",
-  "structured_output": {
-    "enabled": true,
-    "format": {
-      "contacts": [
-        {
-          "name": "string",
-          "email": "string",
-          "phone": "string",
-          "company": "string"
-        }
-      ]
-    }
+  "fallback_strategy": "quality_optimized",
+  "structured_output_enabled": true,
+  "structured_output_schema": {
+    "contacts": [
+      {
+        "name": "string",
+        "email": "string",
+        "phone": "string",
+        "company": "string"
+      }
+    ]
   }
 }
 ```
@@ -276,11 +265,12 @@ graph TB
 import requests
 import json
 
-def call_omni_llm(prompt, model_provider="openai", **kwargs):
+def call_omni_llm(prompt, fallback_strategy="balanced", **kwargs):
     url = "https://your-api-gateway-url/invoke"
     payload = {
         "prompt": prompt,
-        "model_provider": model_provider,
+        "fallback_strategy": fallback_strategy,
+        "enable_fallback": True,
         **kwargs
     }
     
@@ -290,20 +280,17 @@ def call_omni_llm(prompt, model_provider="openai", **kwargs):
 # Basic usage
 result = call_omni_llm(
     "Explain machine learning",
-    model_provider="anthropic",
-    model_name="claude-3-5-sonnet"
+    fallback_strategy="quality_optimized"
 )
 
 # Structured output
 result = call_omni_llm(
     "Analyze this product review",
-    structured_output={
-        "enabled": True,
-        "format": {
-            "sentiment": "string",
-            "score": "number",
-            "key_points": ["array"]
-        }
+    structured_output_enabled=True,
+    structured_output_schema={
+        "sentiment": "string",
+        "score": "number",
+        "key_points": ["array"]
     }
 )
 ```
@@ -319,7 +306,8 @@ async function callOmniLLM(prompt, options = {}) {
   const url = 'https://your-api-gateway-url/invoke';
   const payload = {
     prompt,
-    model_provider: 'openai',
+    fallback_strategy: 'balanced',
+    enable_fallback: true,
     ...options
   };
   
@@ -335,20 +323,18 @@ async function callOmniLLM(prompt, options = {}) {
 // Basic usage
 const result = await callOmniLLM(
   "What is the capital of France?",
-  { model_provider: "groq", model_name: "llama-3.1-70b" }
+  { fallback_strategy: "performance_optimized" }
 );
 
 // Structured output
 const analysis = await callOmniLLM(
   "Analyze this financial data",
   {
-    structured_output: {
-      enabled: true,
-      format: {
-        summary: "string",
-        recommendations: ["array"],
-        risk_level: "string"
-      }
+    structured_output_enabled: true,
+    structured_output_schema: {
+      summary: "string",
+      recommendations: ["array"],
+      risk_level: "string"
     }
   }
 );
@@ -364,8 +350,7 @@ curl -X POST https://your-api-gateway-url/invoke \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Write a haiku about programming",
-    "model_provider": "openai",
-    "model_name": "gpt-4"
+    "fallback_strategy": "quality_optimized"
   }'
 
 # RAG query with custom settings
@@ -373,13 +358,10 @@ curl -X POST https://your-api-gateway-url/invoke \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "What does the documentation say about security?",
-    "model_provider": "anthropic",
-    "model_name": "claude-3-5-sonnet",
-    "rag_config": {
-      "enabled": true,
-      "s3_bucket": "docs-bucket",
-      "vector_store": {"type": "pinecone", "index": "docs-index"}
-    }
+    "fallback_strategy": "balanced",
+    "rag_enabled": true,
+    "s3_bucket": "docs-bucket",
+    "vector_store_type": "pinecone"
   }'
 
 # Structured output for data extraction
@@ -387,16 +369,13 @@ curl -X POST https://your-api-gateway-url/invoke \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "Extract key metrics from this report: [report text]",
-    "model_provider": "openai", 
-    "model_name": "gpt-4",
-    "structured_output": {
-      "enabled": true,
-      "format": {
-        "revenue": "number",
-        "growth_rate": "number", 
-        "key_insights": ["array"],
-        "risks": ["array"]
-      }
+    "fallback_strategy": "quality_optimized",
+    "structured_output_enabled": true,
+    "structured_output_schema": {
+      "revenue": "number",
+      "growth_rate": "number", 
+      "key_insights": ["array"],
+      "risks": ["array"]
     }
   }'
 ```

@@ -49,12 +49,12 @@ class ModelCapability(str, Enum):
 
 
 class FallbackStrategy(str, Enum):
-    """Fallback strategies for provider failures."""
-    ROUND_ROBIN = "round_robin"
+    """LangChain native fallback strategies."""
     PRIORITY_ORDER = "priority_order"
     COST_OPTIMIZED = "cost_optimized"
     PERFORMANCE_OPTIMIZED = "performance_optimized"
-    RANDOM = "random"
+    QUALITY_OPTIMIZED = "quality_optimized"
+    BALANCED = "balanced"
 
 
 class ModelConfiguration(BaseModel):
@@ -172,19 +172,11 @@ class LangChainConfiguration(BaseModel):
     cohere_config: Dict[str, Any] = Field(default_factory=dict, description="Cohere configuration")
     groq_config: Dict[str, Any] = Field(default_factory=dict, description="Groq configuration")
     
-    # Fallback Configuration
-    default_fallback_strategy: FallbackStrategy = Field(default=FallbackStrategy.PRIORITY_ORDER)
-    default_provider_order: List[LLMProvider] = Field(default=[
-        LLMProvider.OPENAI,
-        LLMProvider.ANTHROPIC,
-        LLMProvider.GROQ,
-        LLMProvider.MISTRAL_AI,
-        LLMProvider.COHERE
-    ])
+    # LangChain Fallback Configuration
+    default_fallback_strategy: FallbackStrategy = Field(default=FallbackStrategy.BALANCED)
     
     # Performance Configuration
     provider_timeout: int = Field(default=60, description="Individual provider timeout")
-    concurrent_attempts: bool = Field(default=False, description="Try providers concurrently")
     cache_ttl: int = Field(default=3600, description="Cache TTL in seconds")
     
     # Cost Management
