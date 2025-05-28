@@ -8,7 +8,7 @@ WORKDIR ${LAMBDA_TASK_ROOT}
 COPY requirements.txt .
 
 # Install system dependencies
-RUN yum install -y gcc-c++ pkgconfig make
+RUN yum install -y gcc-c++ pkgconfig make openssl-devel
 
 # Upgrade pip first
 RUN pip install --upgrade pip
