@@ -106,10 +106,10 @@ docker build -t omni-llm:latest .
 print_status "Creating Lambda deployment package..."
 
 # Create a container to extract the deployment package
-docker run --rm \
+docker run --rm --entrypoint="" \
     -v "$BUILD_DIR:/output" \
     omni-llm:latest \
-    sh -c "cd /var/task && zip -r /output/lambda-deployment.zip . -x '*.pyc' '*/__pycache__/*'"
+    sh -c "yum install -y zip && cd /var/task && zip -r /output/lambda-deployment.zip . -x '*.pyc' '*/__pycache__/*'"
 
 # Check if deployment package was created
 if [ ! -f "$BUILD_DIR/lambda-deployment.zip" ]; then
