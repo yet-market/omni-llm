@@ -16,6 +16,9 @@ langchain-mistralai>=0.2.0
 langchain-cohere>=0.3.0
 langchain-groq>=0.2.0
 
+# OpenAI Python SDK
+openai>=1.0.0
+
 # Vector Stores
 langchain-pinecone>=0.2.0
 langchain-chroma>=0.2.0
