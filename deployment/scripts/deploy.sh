@@ -96,6 +96,17 @@ fi
 
 print_success "Deployment package created: $(du -h $BUILD_DIR/lambda-deployment.zip | cut -f1)"
 
+# Load environment variables from .env if it exists
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    print_status "Loading environment variables from .env file..."
+    set -a
+    source "$PROJECT_ROOT/.env"
+    set +a
+    print_success "Environment variables loaded from .env"
+else
+    print_warning ".env file not found, using environment variables or prompts"
+fi
+
 # Prompt for API keys if not provided
 if [ -z "$OPENAI_API_KEY" ]; then
     read -sp "Enter your OpenAI API Key (or press Enter to skip): " OPENAI_API_KEY
@@ -167,6 +178,66 @@ aws lambda wait function-updated \
     --function-name "$LAMBDA_FUNCTION_NAME" \
     --region "$AWS_REGION" \
     --profile "$AWS_PROFILE"
+
+# Update Lambda environment variables with API keys from .env
+print_status "Updating Lambda environment variables..."
+
+# Build environment variables JSON
+ENV_VARS='{"Variables":{'
+ENV_VARS+='"ENVIRONMENT":"'$ENVIRONMENT'",'
+ENV_VARS+='"AWS_REGION":"'$AWS_REGION'",'
+ENV_VARS+='"S3_BUCKET_NAME":"'$S3_BUCKET'",'
+ENV_VARS+='"API_KEYS_SECRET_NAME":"omni-llm/api-keys-'$ENVIRONMENT'",'
+ENV_VARS+='"LLM_PROVIDERS_SECRET_NAME":"omni-llm/providers-'$ENVIRONMENT'",'
+ENV_VARS+='"LOG_LEVEL":"'${LOG_LEVEL:-INFO}'",'
+ENV_VARS+='"ENABLE_XRAY_TRACING":"'${ENABLE_XRAY_TRACING:-true}'",'
+ENV_VARS+='"ENABLE_METRICS":"'${ENABLE_METRICS:-true}'",'
+ENV_VARS+='"METRICS_NAMESPACE":"'${METRICS_NAMESPACE:-OmniLLM}'"'
+
+# Add API keys if provided (for development environments)
+if [ "$ENVIRONMENT" = "dev" ] && [ -n "$OPENAI_API_KEY" ]; then
+    ENV_VARS+=', "OPENAI_API_KEY":"'$OPENAI_API_KEY'"'
+fi
+
+if [ "$ENVIRONMENT" = "dev" ] && [ -n "$ANTHROPIC_API_KEY" ]; then
+    ENV_VARS+=', "ANTHROPIC_API_KEY":"'$ANTHROPIC_API_KEY'"'
+fi
+
+if [ "$ENVIRONMENT" = "dev" ] && [ -n "$MISTRAL_API_KEY" ]; then
+    ENV_VARS+=', "MISTRAL_API_KEY":"'$MISTRAL_API_KEY'"'
+fi
+
+if [ "$ENVIRONMENT" = "dev" ] && [ -n "$COHERE_API_KEY" ]; then
+    ENV_VARS+=', "COHERE_API_KEY":"'$COHERE_API_KEY'"'
+fi
+
+if [ "$ENVIRONMENT" = "dev" ] && [ -n "$GROQ_API_KEY" ]; then
+    ENV_VARS+=', "GROQ_API_KEY":"'$GROQ_API_KEY'"'
+fi
+
+if [ -n "$PINECONE_API_KEY" ]; then
+    ENV_VARS+=', "PINECONE_API_KEY":"'$PINECONE_API_KEY'"'
+fi
+
+if [ -n "$PINECONE_ENVIRONMENT" ]; then
+    ENV_VARS+=', "PINECONE_ENVIRONMENT":"'$PINECONE_ENVIRONMENT'"'
+fi
+
+ENV_VARS+='}}'
+
+# Update Lambda environment variables
+aws lambda update-function-configuration \
+    --function-name "$LAMBDA_FUNCTION_NAME" \
+    --environment "$ENV_VARS" \
+    --region "$AWS_REGION" \
+    --profile "$AWS_PROFILE" \
+    > /dev/null
+
+if [ $? -eq 0 ]; then
+    print_success "Lambda environment variables updated"
+else
+    print_warning "Failed to update Lambda environment variables (function still works with Secrets Manager)"
+fi
 
 # Get stack outputs
 print_status "Retrieving deployment information..."
