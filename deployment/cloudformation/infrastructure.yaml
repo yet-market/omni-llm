@@ -239,6 +239,7 @@ Resources:
   # API Gateway Usage Plan
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn: APIStage
     Properties:
       UsagePlanName: !Sub 'omni-llm-usage-plan-${Environment}'
       Description: 'Usage plan for Omni-LLM API'
@@ -250,7 +251,7 @@ Resources:
         Period: DAY
       ApiStages:
         - ApiId: !Ref RestAPI
-          Stage: !Ref APIStage
+          Stage: !Ref Environment
 
   # API Gateway Usage Plan Key
   UsagePlanKey:
