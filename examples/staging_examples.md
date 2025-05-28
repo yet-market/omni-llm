@@ -5,8 +5,8 @@ This document provides examples specific to the staging environment for testing 
 
 ## Environment URLs
 
-- **Staging**: `https://xxx.execute-api.eu-west-2.amazonaws.com/staging/invoke`
-- **Production**: `https://xxx.execute-api.eu-west-2.amazonaws.com/prod/invoke`
+- **Staging**: `https://your-staging-api.execute-api.region.amazonaws.com/staging/invoke`
+- **Production**: `https://your-production-api.execute-api.region.amazonaws.com/prod/invoke`
 
 ## 🚧 Staging Environment Testing
 

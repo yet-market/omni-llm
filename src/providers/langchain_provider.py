@@ -68,23 +68,29 @@ class LangChainProvider:
     def _initialize_models(self) -> None:
         """Initialize all available LangChain models."""
         try:
-            # OpenAI models
+            # OpenAI models (Latest 2025)
             if self.config.openai_api_key:
                 self.models.update({
                     "gpt-4o": ChatOpenAI(
-                        model="gpt-4o",
+                        model="gpt-4o-2024-11-20",  # Latest stable with 16K output
                         api_key=self.config.openai_api_key,
                         max_retries=0,  # Let fallback handle retries
                         timeout=60
                     ),
                     "gpt-4o-mini": ChatOpenAI(
-                        model="gpt-4o-mini", 
+                        model="gpt-4o-mini-2024-12-17",  # Real-time audio capabilities
                         api_key=self.config.openai_api_key,
                         max_retries=0,
                         timeout=60
                     ),
-                    "gpt-3.5-turbo": ChatOpenAI(
-                        model="gpt-3.5-turbo",
+                    "o3-mini": ChatOpenAI(
+                        model="o3-mini-2025-01-31",  # New reasoning model
+                        api_key=self.config.openai_api_key,
+                        max_retries=0,
+                        timeout=90  # Reasoning models may need more time
+                    ),
+                    "gpt-4o-realtime": ChatOpenAI(
+                        model="gpt-4o-realtime-preview-2024-12-17",  # Real-time audio
                         api_key=self.config.openai_api_key,
                         max_retries=0,
                         timeout=60
@@ -92,17 +98,29 @@ class LangChainProvider:
                 })
                 logger.info("OpenAI models initialized")
             
-            # Anthropic models
+            # Anthropic models (Latest 2025)
             if self.config.anthropic_api_key:
                 self.models.update({
-                    "claude-3-5-sonnet-20241022": ChatAnthropic(
-                        model="claude-3-5-sonnet-20241022",
+                    "claude-sonnet-4": ChatAnthropic(
+                        model="claude-sonnet-4-20250514",  # Latest Sonnet 4
+                        api_key=self.config.anthropic_api_key,
+                        max_retries=0,
+                        timeout=90  # More time for advanced reasoning
+                    ),
+                    "claude-opus-4": ChatAnthropic(
+                        model="claude-opus-4-20250514",  # Latest Opus 4
+                        api_key=self.config.anthropic_api_key,
+                        max_retries=0,
+                        timeout=120  # Most advanced model needs more time
+                    ),
+                    "claude-3-5-sonnet": ChatAnthropic(
+                        model="claude-3-5-sonnet-20241022",  # Latest 3.5 Sonnet
                         api_key=self.config.anthropic_api_key,
                         max_retries=0,
                         timeout=60
                     ),
-                    "claude-3-5-haiku-20241022": ChatAnthropic(
-                        model="claude-3-5-haiku-20241022",
+                    "claude-3-5-haiku": ChatAnthropic(
+                        model="claude-3-5-haiku-20241022",  # Latest 3.5 Haiku
                         api_key=self.config.anthropic_api_key,
                         max_retries=0,
                         timeout=60
@@ -110,23 +128,29 @@ class LangChainProvider:
                 })
                 logger.info("Anthropic models initialized")
             
-            # Groq models (ultra-fast)
+            # Groq models (Latest 2025 - ultra-fast)
             if self.config.groq_api_key:
                 self.models.update({
-                    "llama-3.1-70b-versatile": ChatGroq(
-                        model="llama-3.1-70b-versatile",
+                    "llama-3.3-70b-versatile": ChatGroq(
+                        model="llama-3.3-70b-versatile",  # Latest Llama 3.3 70B
                         api_key=self.config.groq_api_key,
                         max_retries=0,
                         timeout=30
+                    ),
+                    "llama-3.3-70b-specdec": ChatGroq(
+                        model="llama-3.3-70b-specdec",  # Speculative decoding version
+                        api_key=self.config.groq_api_key,
+                        max_retries=0,
+                        timeout=20  # Even faster with speculative decoding
                     ),
                     "llama-3.1-8b-instant": ChatGroq(
-                        model="llama-3.1-8b-instant",
+                        model="llama-3.1-8b-instant",  # Fast fallback
                         api_key=self.config.groq_api_key,
                         max_retries=0,
-                        timeout=30
+                        timeout=15
                     ),
                     "mixtral-8x7b-32768": ChatGroq(
-                        model="mixtral-8x7b-32768",
+                        model="mixtral-8x7b-32768",  # Reliable fallback
                         api_key=self.config.groq_api_key,
                         max_retries=0,
                         timeout=30
@@ -134,17 +158,29 @@ class LangChainProvider:
                 })
                 logger.info("Groq models initialized")
             
-            # Mistral AI models
+            # Mistral AI models (Latest 2025)
             if self.config.mistral_api_key:
                 self.models.update({
+                    "codestral-25.01": ChatMistralAI(
+                        model="codestral-25.01",  # Latest coding model
+                        api_key=self.config.mistral_api_key,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "devstral": ChatMistralAI(
+                        model="devstral",  # Development-optimized model
+                        api_key=self.config.mistral_api_key,
+                        max_retries=0,
+                        timeout=60
+                    ),
                     "mistral-large-latest": ChatMistralAI(
-                        model="mistral-large-latest",
+                        model="mistral-large-latest",  # Latest large model
                         api_key=self.config.mistral_api_key,
                         max_retries=0,
                         timeout=60
                     ),
                     "mistral-small-latest": ChatMistralAI(
-                        model="mistral-small-latest",
+                        model="mistral-small-latest",  # Efficient fallback
                         api_key=self.config.mistral_api_key,
                         max_retries=0,
                         timeout=60
@@ -184,18 +220,32 @@ class LangChainProvider:
                 })
                 logger.info("AWS Bedrock models initialized")
             
-            # Google Vertex AI
+            # Google Vertex AI (Latest 2025)
             if ChatVertexAI and self.config.google_project_id:
                 self.models.update({
-                    "gemini-1.5-pro": ChatVertexAI(
-                        model="gemini-1.5-pro",
+                    "gemini-2.5-flash": ChatVertexAI(
+                        model="gemini-2.5-flash",  # Latest Gemini 2.5 Flash
                         project=self.config.google_project_id,
                         location=self.config.google_location,
                         max_retries=0,
                         timeout=60
                     ),
-                    "gemini-1.5-flash": ChatVertexAI(
-                        model="gemini-1.5-flash",
+                    "gemini-2.0-flash": ChatVertexAI(
+                        model="gemini-2.0-flash",  # Gemini 2.0 Flash
+                        project=self.config.google_project_id,
+                        location=self.config.google_location,
+                        max_retries=0,
+                        timeout=60
+                    ),
+                    "gemini-2.0-flash-lite": ChatVertexAI(
+                        model="gemini-2.0-flash-lite",  # Lightweight version
+                        project=self.config.google_project_id,
+                        location=self.config.google_location,
+                        max_retries=0,
+                        timeout=45
+                    ),
+                    "gemini-1.5-pro": ChatVertexAI(
+                        model="gemini-1.5-pro",  # Reliable fallback
                         project=self.config.google_project_id,
                         location=self.config.google_location,
                         max_retries=0,
@@ -272,12 +322,13 @@ class LangChainProvider:
         """Get models ordered by cost (cheapest first)."""
         cost_priorities = [
             "llama-3.1-8b-instant",      # Groq - Ultra cheap
-            "llama-3.1-70b-versatile",   # Groq - Cheap
+            "llama-3.3-70b-specdec",     # Groq - Fast & cheap (2025)
+            "llama-3.3-70b-versatile",   # Groq - Cheap (2025)
             "gpt-4o-mini",               # OpenAI - Cost effective
-            "claude-3-5-haiku-20241022", # Anthropic - Fast & cheap
-            "gpt-3.5-turbo",             # OpenAI - Classic cheap
+            "claude-3-5-haiku",          # Anthropic - Fast & cheap
+            "gemini-2.0-flash-lite",     # Google - Lightweight (2025)
             "mistral-small-latest",      # Mistral - Small
-            "gemini-1.5-flash",          # Google - Flash
+            "gemini-2.0-flash",          # Google - Flash (2025)
         ]
         
         return [self.models[name] for name in cost_priorities if name in self.models]
@@ -285,13 +336,14 @@ class LangChainProvider:
     def _get_models_by_performance(self) -> List[BaseChatModel]:
         """Get models ordered by performance (fastest first)."""
         performance_priorities = [
+            "llama-3.3-70b-specdec",     # Groq - Ultra fast with speculative decoding (2025)
             "llama-3.1-8b-instant",      # Groq - Ultra fast
-            "llama-3.1-70b-versatile",   # Groq - Very fast
-            "mixtral-8x7b-32768",        # Groq - Fast
+            "llama-3.3-70b-versatile",   # Groq - Very fast (2025)
             "gpt-4o-mini",               # OpenAI - Fast
-            "claude-3-5-haiku-20241022", # Anthropic - Fast
-            "gemini-1.5-flash",          # Google - Flash
-            "gpt-3.5-turbo",             # OpenAI - Fast
+            "claude-3-5-haiku",          # Anthropic - Fast
+            "gemini-2.0-flash-lite",     # Google - Lightning fast (2025)
+            "gemini-2.0-flash",          # Google - Fast (2025)
+            "mixtral-8x7b-32768",        # Groq - Fast
         ]
         
         return [self.models[name] for name in performance_priorities if name in self.models]
@@ -299,13 +351,16 @@ class LangChainProvider:
     def _get_models_by_quality(self) -> List[BaseChatModel]:
         """Get models ordered by quality (best first)."""
         quality_priorities = [
+            "claude-opus-4",             # Anthropic - Highest quality (2025)
+            "claude-sonnet-4",           # Anthropic - Excellent quality (2025)
+            "o3-mini",                   # OpenAI - Advanced reasoning (2025)
             "gpt-4o",                    # OpenAI - Top quality
-            "claude-3-5-sonnet-20241022", # Anthropic - Excellent
+            "claude-3-5-sonnet",         # Anthropic - Excellent
+            "gemini-2.5-flash",          # Google - Latest Pro (2025)
+            "codestral-25.01",           # Mistral - Latest coding (2025)
             "gpt-4o-mini",               # OpenAI - Very good
             "mistral-large-latest",      # Mistral - Large
-            "gemini-1.5-pro",           # Google - Pro
-            "llama-3.1-70b-versatile",  # Groq - Large
-            "command-r-plus",            # Cohere - Plus
+            "llama-3.3-70b-versatile",   # Groq - Large (2025)
         ]
         
         return [self.models[name] for name in quality_priorities if name in self.models]
@@ -314,10 +369,11 @@ class LangChainProvider:
         """Get models with good balance of cost/performance/quality."""
         balanced_priorities = [
             "gpt-4o-mini",               # OpenAI - Great balance
-            "claude-3-5-haiku-20241022", # Anthropic - Fast & good
-            "llama-3.1-70b-versatile",   # Groq - Fast & capable
-            "gemini-1.5-flash",          # Google - Balanced
-            "gpt-3.5-turbo",             # OpenAI - Reliable
+            "claude-3-5-haiku",          # Anthropic - Fast & good
+            "llama-3.3-70b-versatile",   # Groq - Fast & capable (2025)
+            "gemini-2.0-flash",          # Google - Balanced (2025)
+            "claude-3-5-sonnet",         # Anthropic - Quality & speed
+            "devstral",                  # Mistral - Development optimized (2025)
             "mistral-small-latest",      # Mistral - Efficient
         ]
         
@@ -327,10 +383,11 @@ class LangChainProvider:
         """Get models in default priority order."""
         default_priorities = [
             "gpt-4o-mini",               # OpenAI - Best default
-            "claude-3-5-haiku-20241022", # Anthropic - Fast backup
-            "llama-3.1-70b-versatile",   # Groq - Fast & free-ish
-            "gpt-3.5-turbo",             # OpenAI - Reliable
-            "gemini-1.5-flash",          # Google - Alternative
+            "claude-3-5-haiku",          # Anthropic - Fast backup
+            "llama-3.3-70b-versatile",   # Groq - Fast & capable (2025)
+            "gemini-2.0-flash",          # Google - Fast alternative (2025)
+            "claude-3-5-sonnet",         # Anthropic - Quality fallback
+            "devstral",                  # Mistral - Development optimized (2025)
             "mistral-small-latest",      # Mistral - Backup
         ]
         
@@ -535,13 +592,13 @@ class LangChainProvider:
         """Group models by their provider."""
         groups = {}
         for model_name in self.models.keys():
-            if model_name.startswith("gpt-"):
+            if model_name.startswith("gpt-") or model_name.startswith("o3-"):
                 provider = "openai"
-            elif model_name.startswith("claude-"):
+            elif model_name.startswith("claude-") or model_name == "claude-sonnet-4" or model_name == "claude-opus-4":
                 provider = "anthropic"
             elif model_name.startswith("llama-") or model_name.startswith("mixtral-"):
                 provider = "groq"
-            elif model_name.startswith("mistral-"):
+            elif model_name.startswith("mistral-") or model_name.startswith("codestral-") or model_name == "devstral":
                 provider = "mistral"
             elif model_name.startswith("command-"):
                 provider = "cohere"
