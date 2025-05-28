@@ -69,6 +69,7 @@
 - Docker for container builds
 - Python 3.11+
 - API keys for desired LLM providers
+- AWS CLI configured with `yet` profile for eu-west-2 region
 
 ### 1. Clone Repository
 ```bash
@@ -120,11 +121,28 @@ curl -X POST http://localhost:8000/invoke \
 ```
 
 ### 4. Deploy to AWS
+
+#### 🚧 Staging Environment (Development/Testing)
 ```bash
-# Deploy to development environment (uses yet profile, eu-west-2)
-./deployment/scripts/deploy.sh dev
+# Deploy to staging environment (uses yet profile, eu-west-2)
+./deployment/scripts/deploy.sh staging
 
 # Your API keys from .env are automatically loaded as Lambda environment variables
+# Staging features:
+# - Lower memory allocation (1024MB)
+# - Lower API throttling (100 req/s)
+# - Direct API key injection for easier testing
+```
+
+#### 🚀 Production Environment
+```bash
+# Deploy to production environment
+./deployment/scripts/deploy.sh prod
+
+# Production features:
+# - Higher memory allocation (2048MB)
+# - Higher API throttling (1000 req/s)
+# - API keys only from AWS Secrets Manager (more secure)
 ```
 
 ---
@@ -181,6 +199,54 @@ graph TB
 - **📊 Structured Parser**: Guaranteed JSON format compliance
 - **⚡ Performance Optimizer**: Pre-configured fallback strategies, ARM64
 - **🔐 Security Layer**: Authentication, rate limiting, encryption
+
+---
+
+## 🚀 Deployment Guide
+
+### Environment Overview
+
+Omni-LLM supports two deployment environments:
+
+| Environment | Purpose | Memory | Throttling | API Keys | Branch |
+|-------------|---------|---------|------------|----------|---------|
+| **🚧 Staging** | Development/Testing | 1024MB | 100 req/s | .env + Secrets | `staging` |
+| **🚀 Production** | Live/Production | 2048MB | 1000 req/s | Secrets only | `master` |
+
+### Deployment Commands
+
+```bash
+# Deploy staging (for development/testing)
+git checkout staging
+./deployment/scripts/deploy.sh staging
+
+# Deploy production (for live use)
+git checkout master  
+./deployment/scripts/deploy.sh prod
+```
+
+### Environment-Specific Configuration
+
+#### 🚧 Staging Environment
+- **Purpose**: Development, testing, and feature validation
+- **Resource allocation**: Lower memory and throttling for cost efficiency
+- **API Key handling**: Loads from .env file for convenience
+- **Monitoring**: Basic CloudWatch metrics
+- **URL Pattern**: `https://xxx.execute-api.eu-west-2.amazonaws.com/staging/invoke`
+
+#### 🚀 Production Environment  
+- **Purpose**: Live production traffic
+- **Resource allocation**: Higher memory and throttling for performance
+- **API Key handling**: Secure AWS Secrets Manager only
+- **Monitoring**: Full observability with X-Ray tracing
+- **URL Pattern**: `https://xxx.execute-api.eu-west-2.amazonaws.com/prod/invoke`
+
+### Deployment Workflow
+
+1. **Feature Development**: Work on `staging` branch
+2. **Testing**: Deploy to staging environment
+3. **Validation**: Test thoroughly in staging
+4. **Production Release**: Merge `staging` → `master` and deploy to prod
 
 ---
 

@@ -41,11 +41,28 @@ Omni-LLM is a universal AI Lambda gateway that provides a unified API for multip
 - Use ARM64 architecture for cost savings
 
 ### Deployment
-- Use container-based Lambda deployment
+
+#### Branch Strategy
+- **`staging` branch**: Development and testing environment
+- **`master` branch**: Production-ready stable releases
+
+#### Environment-Specific Deployment
+- **Staging**: `./deployment/scripts/deploy.sh staging` (1024MB, 100 req/s)
+- **Production**: `./deployment/scripts/deploy.sh prod` (2048MB, 1000 req/s)
+
+#### Pre-Deployment Checklist
 - Test locally before deployment
 - Run linting and type checking: `python -m pylint src/ && python -m mypy src/`
 - Run tests: `python -m pytest tests/ -v --cov=src`
-- Deploy using: `./deployment/scripts/deploy.sh`
+- Ensure .env file is configured for staging deployments
+- Use AWS Secrets Manager for production API keys
+
+#### Deployment Workflow
+1. **Feature Development**: Work on `staging` branch
+2. **Deploy to Staging**: Test with `./deployment/scripts/deploy.sh staging`
+3. **Validation**: Thorough testing in staging environment
+4. **Merge to Master**: Create PR from `staging` → `master`
+5. **Production Deploy**: `./deployment/scripts/deploy.sh prod`
 
 ### File Organization
 - Keep modules focused and cohesive

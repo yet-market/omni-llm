@@ -4,16 +4,16 @@ Description: 'Omni-LLM Universal AI Lambda Gateway Infrastructure'
 Parameters:
   Environment:
     Type: String
-    Default: 'dev'
-    AllowedValues: ['dev', 'staging', 'prod']
-    Description: 'Environment name'
+    Default: 'staging'
+    AllowedValues: ['staging', 'prod']
+    Description: 'Environment name (staging for development, prod for production)'
   
   LambdaMemorySize:
     Type: Number
     Default: 1024
     MinValue: 512
     MaxValue: 10240
-    Description: 'Lambda function memory size in MB'
+    Description: 'Lambda function memory size in MB (staging: 1024, prod: 2048)'
   
   LambdaTimeout:
     Type: Number
@@ -21,6 +21,16 @@ Parameters:
     MinValue: 60
     MaxValue: 900
     Description: 'Lambda function timeout in seconds'
+  
+  APIThrottleRate:
+    Type: Number
+    Default: 100
+    Description: 'API Gateway throttle rate per second (staging: 100, prod: 1000)'
+  
+  APIThrottleBurst:
+    Type: Number
+    Default: 200
+    Description: 'API Gateway throttle burst limit (staging: 200, prod: 2000)'
   
   OpenAIAPIKey:
     Type: String
@@ -233,8 +243,8 @@ Resources:
       UsagePlanName: !Sub 'omni-llm-usage-plan-${Environment}'
       Description: 'Usage plan for Omni-LLM API'
       Throttle:
-        RateLimit: 100
-        BurstLimit: 200
+        RateLimit: !Ref APIThrottleRate
+        BurstLimit: !Ref APIThrottleBurst
       Quota:
         Limit: 10000
         Period: DAY
@@ -368,8 +378,8 @@ Resources:
           LoggingLevel: INFO
           DataTraceEnabled: true
           MetricsEnabled: true
-          ThrottlingRateLimit: 100
-          ThrottlingBurstLimit: 200
+          ThrottlingRateLimit: !Ref APIThrottleRate
+          ThrottlingBurstLimit: !Ref APIThrottleBurst
 
   # CloudWatch Dashboard
   Dashboard:

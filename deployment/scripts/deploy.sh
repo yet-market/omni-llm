@@ -10,8 +10,17 @@ set -e
 # Configuration
 AWS_PROFILE="yet"
 AWS_REGION="eu-west-2"
-ENVIRONMENT="${1:-dev}"
+ENVIRONMENT="${1:-staging}"
 STACK_NAME="omni-llm-${ENVIRONMENT}"
+
+# Validate environment
+if [[ "$ENVIRONMENT" != "staging" && "$ENVIRONMENT" != "prod" ]]; then
+    print_error "Environment must be 'staging' or 'prod'. Got: $ENVIRONMENT"
+    echo "Usage: $0 [staging|prod]"
+    echo "  staging - Development/testing environment"
+    echo "  prod    - Production environment"
+    exit 1
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -63,6 +72,20 @@ fi
 print_status "Starting deployment to environment: $ENVIRONMENT"
 print_status "Using AWS profile: $AWS_PROFILE"
 print_status "Target region: $AWS_REGION"
+print_status "Stack name: $STACK_NAME"
+
+# Environment-specific configuration
+if [ "$ENVIRONMENT" = "staging" ]; then
+    print_status "🚧 STAGING DEPLOYMENT - Development/Testing Environment"
+    LAMBDA_MEMORY_SIZE=1024
+    API_THROTTLE_RATE=100
+    API_THROTTLE_BURST=200
+else
+    print_status "🚀 PRODUCTION DEPLOYMENT - Live Environment"
+    LAMBDA_MEMORY_SIZE=2048
+    API_THROTTLE_RATE=1000
+    API_THROTTLE_BURST=2000
+fi
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -96,15 +119,25 @@ fi
 
 print_success "Deployment package created: $(du -h $BUILD_DIR/lambda-deployment.zip | cut -f1)"
 
-# Load environment variables from .env if it exists
+# Load environment-specific configuration
+ENV_CONFIG_FILE="$PROJECT_ROOT/deployment/config/${ENVIRONMENT}.env"
+if [ -f "$ENV_CONFIG_FILE" ]; then
+    print_status "Loading $ENVIRONMENT environment configuration..."
+    set -a
+    source "$ENV_CONFIG_FILE"
+    set +a
+    print_success "Environment configuration loaded from $ENV_CONFIG_FILE"
+fi
+
+# Load local .env file for additional overrides (primarily for staging)
 if [ -f "$PROJECT_ROOT/.env" ]; then
-    print_status "Loading environment variables from .env file..."
+    print_status "Loading local .env overrides..."
     set -a
     source "$PROJECT_ROOT/.env"
     set +a
-    print_success "Environment variables loaded from .env"
+    print_success "Local environment variables loaded from .env"
 else
-    print_warning ".env file not found, using environment variables or prompts"
+    print_warning ".env file not found, using environment-specific config only"
 fi
 
 # Prompt for API keys if not provided
@@ -130,6 +163,9 @@ aws cloudformation deploy \
         Environment="$ENVIRONMENT" \
         OpenAIAPIKey="$OPENAI_API_KEY" \
         APIKeyValue="$API_KEY_VALUE" \
+        LambdaMemorySize="$LAMBDA_MEMORY_SIZE" \
+        APIThrottleRate="$API_THROTTLE_RATE" \
+        APIThrottleBurst="$API_THROTTLE_BURST" \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "$AWS_REGION" \
     --profile "$AWS_PROFILE" \
@@ -194,24 +230,24 @@ ENV_VARS+='"ENABLE_XRAY_TRACING":"'${ENABLE_XRAY_TRACING:-true}'",'
 ENV_VARS+='"ENABLE_METRICS":"'${ENABLE_METRICS:-true}'",'
 ENV_VARS+='"METRICS_NAMESPACE":"'${METRICS_NAMESPACE:-OmniLLM}'"'
 
-# Add API keys if provided (for development environments)
-if [ "$ENVIRONMENT" = "dev" ] && [ -n "$OPENAI_API_KEY" ]; then
+# Add API keys if provided (for staging environment)
+if [ "$ENVIRONMENT" = "staging" ] && [ -n "$OPENAI_API_KEY" ]; then
     ENV_VARS+=', "OPENAI_API_KEY":"'$OPENAI_API_KEY'"'
 fi
 
-if [ "$ENVIRONMENT" = "dev" ] && [ -n "$ANTHROPIC_API_KEY" ]; then
+if [ "$ENVIRONMENT" = "staging" ] && [ -n "$ANTHROPIC_API_KEY" ]; then
     ENV_VARS+=', "ANTHROPIC_API_KEY":"'$ANTHROPIC_API_KEY'"'
 fi
 
-if [ "$ENVIRONMENT" = "dev" ] && [ -n "$MISTRAL_API_KEY" ]; then
+if [ "$ENVIRONMENT" = "staging" ] && [ -n "$MISTRAL_API_KEY" ]; then
     ENV_VARS+=', "MISTRAL_API_KEY":"'$MISTRAL_API_KEY'"'
 fi
 
-if [ "$ENVIRONMENT" = "dev" ] && [ -n "$COHERE_API_KEY" ]; then
+if [ "$ENVIRONMENT" = "staging" ] && [ -n "$COHERE_API_KEY" ]; then
     ENV_VARS+=', "COHERE_API_KEY":"'$COHERE_API_KEY'"'
 fi
 
-if [ "$ENVIRONMENT" = "dev" ] && [ -n "$GROQ_API_KEY" ]; then
+if [ "$ENVIRONMENT" = "staging" ] && [ -n "$GROQ_API_KEY" ]; then
     ENV_VARS+=', "GROQ_API_KEY":"'$GROQ_API_KEY'"'
 fi
 
@@ -272,8 +308,7 @@ TEST_RESPONSE=$(curl -s \
     -H "x-api-key: $API_KEY_VALUE" \
     -d '{
         "prompt": "Hello, world! Please respond with a simple greeting.",
-        "model_provider": "openai",
-        "model_name": "gpt-3.5-turbo",
+        "fallback_strategy": "balanced",
         "max_tokens": 50
     }' \
     "$API_ENDPOINT/invoke")
@@ -304,8 +339,17 @@ echo "Test your deployment:"
 echo "curl -X POST \\"
 echo "  -H \"Content-Type: application/json\" \\"
 echo "  -H \"x-api-key: $API_KEY_VALUE\" \\"
-echo "  -d '{\"prompt\": \"Hello!\", \"model_provider\": \"openai\", \"model_name\": \"gpt-3.5-turbo\"}' \\"
+echo "  -d '{\"prompt\": \"Hello!\", \"fallback_strategy\": \"balanced\"}' \\"
 echo "  \"$API_ENDPOINT/invoke\""
+echo
+echo "Environment URLs:"
+if [ "$ENVIRONMENT" = "staging" ]; then
+    echo "🚧 Staging:    $API_ENDPOINT"
+    echo "🚀 Production: https://api-prod.your-domain.com (deploy with: ./deploy.sh prod)"
+else
+    echo "🚧 Staging:    https://api-staging.your-domain.com"
+    echo "🚀 Production: $API_ENDPOINT"
+fi
 echo
 echo "=================================================================="
 
