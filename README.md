@@ -132,6 +132,249 @@ graph TB
 
 ---
 
+## 🏗️ Detailed AWS Infrastructure Architecture
+
+```mermaid
+graph TB
+    subgraph "Internet & External Services"
+        USERS[Enterprise Users<br/>Web/Mobile/API]
+        CDN[CloudFront CDN<br/>Global Edge Cache]
+        DNS[Route 53<br/>DNS Management]
+        
+        subgraph "AI Provider APIs"
+            OPENAI[OpenAI API<br/>gpt-4o, o3-mini]
+            ANTHROPIC[Anthropic API<br/>claude-sonnet-4, opus-4]
+            GROQ[Groq API<br/>llama-3.3-70b-specdec]
+            MISTRAL[Mistral API<br/>codestral-25.01, devstral]
+            GOOGLE[Google Vertex AI<br/>gemini-2.5-flash]
+            COHERE[Cohere API<br/>command-r-plus]
+        end
+    end
+    
+    subgraph "AWS Region: eu-west-2"
+        subgraph "Public Subnets"
+            subgraph "API Gateway Layer"
+                APIGW[API Gateway<br/>Regional Endpoint<br/>Custom Domain]
+                WAFV2[AWS WAF v2<br/>DDoS Protection<br/>Rate Limiting]
+                CERT[ACM Certificate<br/>SSL/TLS Termination]
+            end
+        end
+        
+        subgraph "Private Subnets"
+            subgraph "Container Infrastructure"
+                ECR_STAGING[ECR Repository<br/>omni-llm-gateway-staging<br/>Vulnerability Scanning]
+                ECR_PROD[ECR Repository<br/>omni-llm-gateway-prod<br/>Image Lifecycle Policies]
+                
+                subgraph "Lambda Execution Environment"
+                    LAMBDA_STAGING[Lambda Function<br/>Staging Environment<br/>1024MB / ARM64<br/>100 req/s throttle]
+                    LAMBDA_PROD[Lambda Function<br/>Production Environment<br/>2048MB / ARM64<br/>1000 req/s throttle]
+                end
+            end
+            
+            subgraph "Storage Layer"
+                S3_DOCS[S3 Bucket<br/>Document Storage<br/>Server-Side Encryption]
+                S3_LOGS[S3 Bucket<br/>Access Logs<br/>Lifecycle Policies]
+                S3_CONFIG[S3 Bucket<br/>Configuration<br/>Versioning Enabled]
+            end
+        end
+        
+        subgraph "Security & Access Control"
+            subgraph "IAM Roles & Policies"
+                IAM_LAMBDA[Lambda Execution Role<br/>VPC, ECR, CloudWatch<br/>Least Privilege Access]
+                IAM_APIGW[API Gateway Role<br/>CloudWatch Logging<br/>X-Ray Tracing]
+                IAM_ECR[ECR Access Role<br/>Image Pull/Push<br/>Vulnerability Reporting]
+            end
+            
+            subgraph "Environment Variables"
+                ENV_STAGING[Staging Env Vars<br/>API Keys<br/>Log Level: DEBUG]
+                ENV_PROD[Production Env Vars<br/>Secrets Manager ARNs<br/>Log Level: INFO]
+            end
+        end
+        
+        subgraph "Monitoring & Observability"
+            subgraph "CloudWatch"
+                CW_LOGS[CloudWatch Logs<br/>Lambda Function Logs<br/>API Gateway Logs]
+                CW_METRICS[CloudWatch Metrics<br/>Custom Business Metrics<br/>Performance KPIs]
+                CW_ALARMS[CloudWatch Alarms<br/>Error Rate Monitoring<br/>Cost Threshold Alerts]
+                CW_DASHBOARD[CloudWatch Dashboard<br/>Real-time Monitoring<br/>Executive Summary]
+            end
+            
+            XRAY[AWS X-Ray<br/>Distributed Tracing<br/>Performance Analysis<br/>Error Root Cause]
+        end
+        
+        subgraph "Networking & Security"
+            VPC[VPC<br/>Private Networking<br/>CIDR: 10.0.0.0/16]
+            
+            subgraph "Subnets"
+                PUB_SUBNET_A[Public Subnet AZ-A<br/>10.0.1.0/24]
+                PUB_SUBNET_B[Public Subnet AZ-B<br/>10.0.2.0/24]
+                PRIV_SUBNET_A[Private Subnet AZ-A<br/>10.0.10.0/24]
+                PRIV_SUBNET_B[Private Subnet AZ-B<br/>10.0.20.0/24]
+            end
+            
+            IGW[Internet Gateway<br/>Public Internet Access]
+            NATGW[NAT Gateway<br/>Outbound Internet<br/>for Private Subnets]
+            
+            subgraph "Security Groups"
+                SG_LAMBDA[Lambda Security Group<br/>HTTPS Outbound Only<br/>443, 80]
+                SG_VPC_ENDPOINTS[VPC Endpoint SG<br/>Internal AWS Services<br/>443]
+            end
+            
+            subgraph "VPC Endpoints"
+                VPC_S3[S3 VPC Endpoint<br/>Gateway Endpoint<br/>Cost Optimization]
+                VPC_ECR[ECR VPC Endpoint<br/>Interface Endpoint<br/>Private Registry Access]
+                VPC_LOGS[CloudWatch Logs<br/>VPC Endpoint<br/>Private Logging]
+            end
+        end
+        
+        subgraph "DevOps & CI/CD"
+            subgraph "Container Build Pipeline"
+                DOCKER[Docker Build<br/>Multi-stage Builds<br/>ARM64 Optimization]
+                BUILD[Build Process<br/>Dependency Caching<br/>Security Scanning]
+            end
+            
+            subgraph "Deployment Pipeline"
+                CF_TEMPLATE[CloudFormation<br/>Infrastructure as Code<br/>Environment Parameters]
+                DEPLOY_SCRIPT[Deploy Script<br/>ECR Push & Pull<br/>Lambda Update]
+            end
+        end
+    end
+    
+    %% User Flow
+    USERS --> CDN
+    CDN --> DNS
+    DNS --> WAFV2
+    WAFV2 --> CERT
+    CERT --> APIGW
+    
+    %% API Gateway to Lambda
+    APIGW --> LAMBDA_STAGING
+    APIGW --> LAMBDA_PROD
+    
+    %% Container Infrastructure
+    ECR_STAGING --> LAMBDA_STAGING
+    ECR_PROD --> LAMBDA_PROD
+    
+    %% Lambda to AI Providers
+    LAMBDA_STAGING --> OPENAI
+    LAMBDA_STAGING --> ANTHROPIC
+    LAMBDA_STAGING --> GROQ
+    LAMBDA_STAGING --> MISTRAL
+    LAMBDA_STAGING --> GOOGLE
+    LAMBDA_STAGING --> COHERE
+    
+    LAMBDA_PROD --> OPENAI
+    LAMBDA_PROD --> ANTHROPIC
+    LAMBDA_PROD --> GROQ
+    LAMBDA_PROD --> MISTRAL
+    LAMBDA_PROD --> GOOGLE
+    LAMBDA_PROD --> COHERE
+    
+    %% Storage Access
+    LAMBDA_STAGING --> S3_DOCS
+    LAMBDA_PROD --> S3_DOCS
+    LAMBDA_STAGING --> S3_CONFIG
+    LAMBDA_PROD --> S3_CONFIG
+    
+    %% IAM Relationships
+    IAM_LAMBDA --> LAMBDA_STAGING
+    IAM_LAMBDA --> LAMBDA_PROD
+    IAM_APIGW --> APIGW
+    IAM_ECR --> ECR_STAGING
+    IAM_ECR --> ECR_PROD
+    
+    %% Environment Variables
+    ENV_STAGING --> LAMBDA_STAGING
+    ENV_PROD --> LAMBDA_PROD
+    
+    %% Monitoring
+    LAMBDA_STAGING --> CW_LOGS
+    LAMBDA_PROD --> CW_LOGS
+    LAMBDA_STAGING --> CW_METRICS
+    LAMBDA_PROD --> CW_METRICS
+    LAMBDA_STAGING --> XRAY
+    LAMBDA_PROD --> XRAY
+    APIGW --> CW_LOGS
+    
+    %% Alerting
+    CW_METRICS --> CW_ALARMS
+    CW_ALARMS --> CW_DASHBOARD
+    
+    %% Networking
+    APIGW --> VPC
+    LAMBDA_STAGING --> VPC
+    LAMBDA_PROD --> VPC
+    VPC --> PUB_SUBNET_A
+    VPC --> PUB_SUBNET_B
+    VPC --> PRIV_SUBNET_A
+    VPC --> PRIV_SUBNET_B
+    PUB_SUBNET_A --> IGW
+    PUB_SUBNET_B --> IGW
+    PRIV_SUBNET_A --> NATGW
+    PRIV_SUBNET_B --> NATGW
+    NATGW --> IGW
+    
+    %% VPC Endpoints
+    LAMBDA_STAGING --> VPC_S3
+    LAMBDA_PROD --> VPC_S3
+    LAMBDA_STAGING --> VPC_ECR
+    LAMBDA_PROD --> VPC_ECR
+    LAMBDA_STAGING --> VPC_LOGS
+    LAMBDA_PROD --> VPC_LOGS
+    
+    %% Build & Deploy
+    DOCKER --> BUILD
+    BUILD --> ECR_STAGING
+    BUILD --> ECR_PROD
+    CF_TEMPLATE --> DEPLOY_SCRIPT
+    DEPLOY_SCRIPT --> ECR_STAGING
+    DEPLOY_SCRIPT --> ECR_PROD
+    
+    %% Styling
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    classDef compute fill:#F58536,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    classDef storage fill:#3F8FD2,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    classDef security fill:#DD344C,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    classDef network fill:#8C4FFF,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    classDef external fill:#146EB4,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    classDef monitor fill:#759C3E,stroke:#232F3E,stroke-width:2px,color:#FFFFFF
+    
+    class APIGW,WAFV2,CERT,IGW,NATGW aws
+    class LAMBDA_STAGING,LAMBDA_PROD,ECR_STAGING,ECR_PROD compute
+    class S3_DOCS,S3_LOGS,S3_CONFIG storage
+    class IAM_LAMBDA,IAM_APIGW,IAM_ECR,SG_LAMBDA,SG_VPC_ENDPOINTS security
+    class VPC,PUB_SUBNET_A,PUB_SUBNET_B,PRIV_SUBNET_A,PRIV_SUBNET_B,VPC_S3,VPC_ECR,VPC_LOGS network
+    class OPENAI,ANTHROPIC,GROQ,MISTRAL,GOOGLE,COHERE,USERS,CDN,DNS external
+    class CW_LOGS,CW_METRICS,CW_ALARMS,CW_DASHBOARD,XRAY monitor
+```
+
+### AWS Infrastructure Details
+
+#### 🏗️ **Multi-Environment Architecture**
+- **Dual Deployment**: Separate staging and production environments
+- **Environment Isolation**: Independent ECR repositories, Lambda functions, and configurations
+- **Resource Optimization**: Different memory allocations and throttling limits per environment
+
+#### 🔒 **Enterprise Security Model**
+- **WAF v2 Protection**: DDoS mitigation, bot detection, and IP filtering
+- **VPC Private Networking**: Lambda functions deployed in private subnets
+- **VPC Endpoints**: Cost-optimized private access to AWS services
+- **IAM Least Privilege**: Role-based access with minimal required permissions
+
+#### 📊 **Comprehensive Monitoring Stack**
+- **X-Ray Distributed Tracing**: End-to-end request flow visualization
+- **Custom CloudWatch Metrics**: Business KPIs and performance indicators
+- **Real-time Dashboards**: Executive and operational monitoring views
+- **Proactive Alerting**: Cost thresholds and error rate monitoring
+
+#### 🚀 **Container-First Deployment**
+- **ECR Private Registry**: Secure container image storage with scanning
+- **ARM64 Optimization**: Graviton2 processors for 20% cost savings
+- **Multi-stage Builds**: Optimized Docker layers for fast cold starts
+- **Automated Lifecycle**: Image cleanup and vulnerability management
+
+---
+
 ## 🌟 Enterprise Features
 
 ### 🤖 Universal LLM Provider Orchestra
