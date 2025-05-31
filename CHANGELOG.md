@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-05-31
+
+### 🚀 Production Container Deployment
+
+#### Added
+- **Enterprise Container Architecture**: Full AWS Lambda container deployment with ECR registry
+- **Production Deployment Scripts**: Automated deployment pipeline with `deploy-simple.sh`
+- **Comprehensive API Testing**: Complete test suite with `test_api.py` covering all use cases
+- **Security Hardening**: API key authentication, usage plans, and rate limiting
+- **CloudFormation Infrastructure**: Production-ready AWS infrastructure as code
+
+#### Container & Deployment
+- **ECR Integration**: Private container registry with vulnerability scanning
+- **ARM64 Optimization**: Native Graviton2 processor support for cost efficiency  
+- **Multi-Stage Deployment**: ZIP to container conversion for seamless updates
+- **Health Monitoring**: Built-in health checks and performance metrics
+- **Environment Management**: Staging and production environment separation
+
+#### API Enhancements
+- **CORS Support**: Cross-origin resource sharing for web applications
+- **Rate Limiting**: API Gateway throttling and usage quotas
+- **Error Handling**: Comprehensive error responses with structured logging
+- **Authentication**: API key-based access control with usage tracking
+- **Multiple Endpoints**: Health checks, chat completion, and streaming support
+
+#### Developer Experience
+- **Environment Templates**: Secure `.env.example` for easy setup
+- **Automated Testing**: 16 comprehensive test cases for all API functionality
+- **Documentation Updates**: Complete deployment and testing instructions
+- **Open Source Ready**: Secure secret management without exposure
+
+#### Security & Compliance
+- **Secret Management**: Environment-based configuration without hardcoded keys
+- **IAM Best Practices**: Least-privilege access policies for AWS resources
+- **Container Security**: Vulnerability scanning and secure base images
+- **Audit Logging**: Complete request/response tracking for compliance
+
+### Technical Specifications
+- **Runtime**: Python 3.11 on AWS Lambda ARM64
+- **Container Size**: Optimized Docker images with layer caching
+- **API Gateway**: Regional endpoints with custom domain support
+- **Monitoring**: CloudWatch integration with X-Ray tracing
+- **Scalability**: Auto-scaling Lambda with concurrent execution control
+
+## [0.1.0] - 2025-05-30
+
 ### Added
 - Initial project setup and specification
 - Comprehensive technical specification with 60+ pages of documentation

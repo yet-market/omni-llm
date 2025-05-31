@@ -116,8 +116,9 @@ print_status "Building Docker image..."
 docker build -t omni-llm:latest .
 
 # Tag image for ECR
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 docker tag omni-llm:latest "${ECR_REPO_URI}:latest"
-docker tag omni-llm:latest "${ECR_REPO_URI}:$(date +%Y%m%d-%H%M%S)"
+docker tag omni-llm:latest "${ECR_REPO_URI}:${TIMESTAMP}"
 
 print_success "Docker image built and tagged for ECR"
 
@@ -180,10 +181,10 @@ else
     exit 1
 fi
 
-# Push Docker image to ECR
+# Push Docker image to ECR after CloudFormation creates the repository
 print_status "Pushing Docker image to ECR..."
 docker push "${ECR_REPO_URI}:latest"
-docker push "${ECR_REPO_URI}:$(date +%Y%m%d-%H%M%S)"
+docker push "${ECR_REPO_URI}:${TIMESTAMP}"
 
 if [ $? -eq 0 ]; then
     print_success "Docker image pushed to ECR successfully"
@@ -191,6 +192,9 @@ else
     print_error "Failed to push Docker image to ECR"
     exit 1
 fi
+
+# Update Lambda function code with ECR image
+print_status "Updating Lambda function code with ECR image..."
 
 # Get Lambda function name from stack outputs
 LAMBDA_FUNCTION_NAME=$(aws cloudformation describe-stacks \
@@ -204,8 +208,6 @@ if [ -z "$LAMBDA_FUNCTION_NAME" ]; then
     print_error "Could not retrieve Lambda function name from stack outputs"
     exit 1
 fi
-
-print_status "Updating Lambda function code with ECR image..."
 
 # Update Lambda function code with ECR image
 aws lambda update-function-code \

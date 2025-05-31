@@ -418,6 +418,71 @@ graph TB
 ## 🚀 Quick Start
 
 ### Prerequisites
+
+- **AWS Account** with CLI configured
+- **Docker** installed and running
+- **Python 3.11+** for testing
+- **API Keys** from LLM providers (OpenAI, Anthropic, etc.)
+
+### 1. Environment Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/omni-llm.git
+cd omni-llm
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your API keys and AWS configuration
+nano .env
+```
+
+### 2. Configure AWS Credentials
+
+```bash
+# Configure AWS CLI with your profile
+aws configure --profile your-profile-name
+
+# Or export credentials
+export AWS_ACCESS_KEY_ID=your_access_key
+export AWS_SECRET_ACCESS_KEY=your_secret_key
+export AWS_DEFAULT_REGION=eu-west-2
+```
+
+### 3. Deploy to AWS
+
+```bash
+# Deploy to staging environment
+./deployment/scripts/deploy-simple.sh staging
+
+# Deploy to production
+./deployment/scripts/deploy-simple.sh prod
+```
+
+The deployment script will:
+- ✅ Create ECR repository for container images
+- ✅ Build and push Docker image to ECR
+- ✅ Deploy Lambda function with container runtime
+- ✅ Configure API Gateway with authentication
+- ✅ Set up monitoring and logging
+- ✅ Output API endpoint and credentials
+
+### 4. Test Your Deployment
+
+```bash
+# Run comprehensive API tests
+python test_api.py "https://your-api-endpoint" "your-api-key"
+
+# Manual test
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{"prompt": "Hello!", "max_tokens": 50}' \
+  "https://your-api-endpoint/invoke"
+```
+
+### Original Prerequisites
 - **AWS Account**: With ECR and Lambda permissions
 - **Docker**: For container builds and local testing
 - **AWS CLI**: Configured with `yet` profile for eu-west-2

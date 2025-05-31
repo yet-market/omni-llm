@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Enterprise-Grade Multi-Provider AI Gateway with Distributed Computing Architecture and Intelligent Load Balancing on AWS Serverless Infrastructure'
+Description: 'Simple Lambda Container Deployment for Omni-LLM Gateway'
 
 Parameters:
   Environment:
@@ -18,76 +18,16 @@ Parameters:
     Default: 900
     Description: 'Lambda function timeout in seconds'
   
-  APIThrottleRate:
-    Type: Number
-    Default: 100
-    Description: 'API Gateway throttle rate per second'
-  
-  APIThrottleBurst:
-    Type: Number
-    Default: 200
-    Description: 'API Gateway throttle burst limit'
-  
   APIKeyValue:
     Type: String
     NoEcho: true
     Description: 'API Key for accessing the gateway'
-    Default: ''
 
 Resources:
-  # IAM Role for Lambda (minimal permissions)
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub 'omni-llm-lambda-role-${Environment}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
-      Policies:
-        - PolicyName: S3ReadAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource: '*'
-                Condition:
-                  StringLike:
-                    's3:prefix': 
-                      - 'vectors/*'
-                      - 'documents/*'
-        - PolicyName: ECRAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ecr:GetDownloadUrlForLayer
-                  - ecr:BatchGetImage
-                Resource: !GetAtt ECRRepository.Arn
-
-  # CloudWatch Log Group
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    DependsOn: LambdaFunction
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${LambdaFunction}'
-      RetentionInDays: 30
-
-  # ECR Repository for Lambda Container Images
+  # ECR Repository - Create first
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub 'omni-llm-gateway-${Environment}'
       ImageScanningConfiguration:
         ScanOnPush: true
       LifecyclePolicy:
@@ -109,16 +49,47 @@ Resources:
             ]
           }
 
-  # Lambda Function using ECR Image
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: !GetAtt ECRRepository.Arn
+
+  # Lambda Function - Initially with placeholder ZIP function
   LambdaFunction:
     Type: AWS::Lambda::Function
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
     Properties:
+      FunctionName: !Sub 'omni-llm-gateway-${Environment}'
       Role: !GetAtt LambdaExecutionRole.Arn
-      PackageType: Image
       Code:
-        ImageUri: public.ecr.aws/lambda/python:3.11-arm64
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json'},
+                  'body': '{"message": "Placeholder - will be updated with container image"}'
+              }
+      Handler: index.lambda_handler
+      Runtime: python3.11
       MemorySize: !Ref LambdaMemorySize
       Timeout: !Ref LambdaTimeout
       Architectures:
@@ -126,14 +97,8 @@ Resources:
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
-          LOG_LEVEL: !If [IsProd, 'INFO', 'DEBUG']
-          ENABLE_XRAY_TRACING: 'true'
-          ENABLE_METRICS: 'true'
-          METRICS_NAMESPACE: !Sub 'OmniLLM-${Environment}'
-      TracingConfig:
-        Mode: Active
 
-  # API Gateway REST API
+  # API Gateway
   RestAPI:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -143,7 +108,7 @@ Resources:
         Types:
           - REGIONAL
 
-  # API Gateway Resource - /invoke
+  # API Gateway Resource
   InvokeResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -151,7 +116,7 @@ Resources:
       ParentId: !GetAtt RestAPI.RootResourceId
       PathPart: 'invoke'
 
-  # API Gateway Method - POST /invoke
+  # API Gateway Method
   InvokeMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -164,15 +129,8 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
-      MethodResponses:
-        - StatusCode: '200'
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
-        - StatusCode: '400'
-        - StatusCode: '401'
-        - StatusCode: '500'
 
-  # API Gateway Method - OPTIONS /invoke (CORS)
+  # CORS OPTIONS Method
   InvokeOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -185,9 +143,11 @@ Resources:
         IntegrationResponses:
           - StatusCode: '200'
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,x-api-key'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
         RequestTemplates:
           application/json: '{"statusCode": 200}'
       MethodResponses:
@@ -197,7 +157,7 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
-  # API Gateway Resource - /health
+  # Health check endpoint
   HealthResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -205,7 +165,6 @@ Resources:
       ParentId: !GetAtt RestAPI.RootResourceId
       PathPart: 'health'
 
-  # API Gateway Method - GET /health
   HealthMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -218,7 +177,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
 
-  # Lambda Permission for API Gateway
+  # Lambda Permission
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -230,7 +189,7 @@ Resources:
   # API Gateway Deployment
   APIDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn:
+    DependsOn: 
       - InvokeMethod
       - InvokeOptionsMethod
       - HealthMethod
@@ -251,14 +210,12 @@ Resources:
         - ResourcePath: '/*'
           HttpMethod: '*'
           MetricsEnabled: true
-          ThrottlingRateLimit: !Ref APIThrottleRate
-          ThrottlingBurstLimit: !Ref APIThrottleBurst
+          ThrottlingRateLimit: 100
+          ThrottlingBurstLimit: 200
 
   # API Gateway API Key
   APIKey:
     Type: AWS::ApiGateway::ApiKey
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
     Properties:
       Name: !Sub 'omni-llm-api-key-${Environment}'
       Description: !Sub 'API Key for Omni-LLM Gateway ${Environment}'
@@ -273,10 +230,10 @@ Resources:
       UsagePlanName: !Sub 'omni-llm-usage-plan-${Environment}'
       Description: !Sub 'Usage plan for Omni-LLM API ${Environment}'
       Throttle:
-        RateLimit: !Ref APIThrottleRate
-        BurstLimit: !Ref APIThrottleBurst
+        RateLimit: 100
+        BurstLimit: 200
       Quota:
-        Limit: !If [IsProd, 100000, 10000]
+        Limit: 10000
         Period: DAY
       ApiStages:
         - ApiId: !Ref RestAPI
@@ -290,11 +247,19 @@ Resources:
       KeyType: API_KEY
       UsagePlanId: !Ref UsagePlan
 
-# Conditions for environment-specific settings
-Conditions:
-  IsProd: !Equals [!Ref Environment, 'prod']
-
 Outputs:
+  ECRRepositoryURI:
+    Description: 'ECR Repository URI'
+    Value: !GetAtt ECRRepository.RepositoryUri
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryURI'
+
+  LambdaFunctionName:
+    Description: 'Lambda Function Name'
+    Value: !Ref LambdaFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+
   APIEndpoint:
     Description: 'API Gateway endpoint URL'
     Value: !Sub 'https://${RestAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
@@ -302,31 +267,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-APIEndpoint'
 
   APIKey:
-    Description: 'API Key for accessing the gateway'
+    Description: 'API Gateway API Key'
     Value: !Ref APIKey
     Export:
       Name: !Sub '${AWS::StackName}-APIKey'
-
-  LambdaFunctionArn:
-    Description: 'Lambda function ARN'
-    Value: !GetAtt LambdaFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-LambdaArn'
-
-  LambdaFunctionName:
-    Description: 'Lambda function name'
-    Value: !Ref LambdaFunction
-    Export:
-      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
-
-  ECRRepositoryURI:
-    Description: 'ECR Repository URI'
-    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}'
-    Export:
-      Name: !Sub '${AWS::StackName}-ECRRepositoryURI'
-
-  ECRRepositoryName:
-    Description: 'ECR Repository Name'
-    Value: !Ref ECRRepository
-    Export:
-      Name: !Sub '${AWS::StackName}-ECRRepositoryName'

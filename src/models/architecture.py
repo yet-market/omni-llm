@@ -348,6 +348,7 @@ def get_default_architecture() -> OmniLLMArchitecture:
         response_schema=ResponseSchema(
             success=True,
             content="Example response",
+            structured_data=None,
             provider_used=LLMProvider.OPENAI,
             model_used="gpt-4o-mini",
             fallback_attempts=[],
@@ -357,6 +358,9 @@ def get_default_architecture() -> OmniLLMArchitecture:
             total_cost=0.01,
             total_latency=1.5,
             provider_latency=1.2,
+            rag_context=None,
+            tool_calls=None,
+            error=None,
             request_id="example-123",
             timestamp="2024-01-01T00:00:00Z"
         )
